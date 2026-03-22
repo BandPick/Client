@@ -1,4 +1,5 @@
 export default defineNuxtConfig({
+  modules: ["@pinia/nuxt", "@nuxtjs/tailwindcss"],
   devtools: { enabled: true },
   compatibilityDate: "2026-03-22",
   app: {
