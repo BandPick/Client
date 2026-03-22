@@ -41,6 +41,46 @@ COMMUNICATION
 ```
 <br/>
 
+## ⚙️ 시작하기
+
+### 설치 및 실행
+
+```bash
+# 1) 저장소 클론 (실제 팀 저장소 URL로 바꿔 주세요)
+git clone https://github.com/<조직 또는 사용자>/BandPick.git
+cd BandPick/Client
+
+# 2) 의존성 설치
+npm install
+
+```bash
+# 3) 개발 서버 (기본 http://localhost:3000)
+npm run dev
+```
+
+### 빌드
+
+모든 명령은 **`Client` 폴더**에서 실행합니다.
+
+```bash
+# Nuxt 프로덕션 빌드 (SSR, .output 생성)
+npm run build
+
+# 정적 사이트 생성 (Render Static Site 등 SSG 배포용)
+npm run generate
+
+# 빌드 결과 미리보기
+npm run preview
+```
+
+**SSR 빌드 후 Node로 직접 띄우기** (`npm run build` 실행 후):
+
+```bash
+node .output/server/index.mjs
+```
+
+<br/>
+
 
 ## 📱 주요 화면
 
