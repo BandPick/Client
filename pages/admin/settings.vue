@@ -7,13 +7,17 @@
 
     <div class="mt-8 max-w-2xl space-y-10">
       <div class="max-w-lg space-y-4">
-        <div>
-          <label class="mb-1 block text-sm font-medium">마감 일시</label>
-          <input
-            v-model="draft.deadline"
-            type="datetime-local"
-            class="w-full rounded-lg border border-slate-200 px-3 py-2"
-          />
+        <div class="flex items-end gap-3">
+          <div class="flex-1">
+            <label class="mb-1 block text-sm font-medium">마감 일시</label>
+            <input v-model="draft.deadline" type="datetime-local"
+              class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </div>
+
+          <button class="rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
+            @click="saveSettings">
+            저장
+          </button>
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium">최소 희망 곡 수</label>
@@ -22,30 +26,20 @@
             <!-- 보컬 -->
             <div class="flex-1">
               <span class="text-sm text-slate-600">보컬</span>
-              <input
-                v-model.number="draft.minVocal"
-                type="number"
-                min="1"
-                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-              />
+              <input v-model.number="draft.minVocal" type="number" min="1"
+                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
             </div>
 
             <!-- 세션 -->
             <div class="flex-1">
               <span class="text-sm text-slate-600">세션</span>
-              <input
-                v-model.number="draft.minSession"
-                type="number"
-                min="1"
-                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-              />
+              <input v-model.number="draft.minSession" type="number" min="1"
+                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
             </div>
 
             <!-- 저장 버튼 -->
-            <button
-              class="mt-7 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-              @click="saveSettings"
-            >
+            <button class="mt-7 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              @click="saveSettings">
               저장
             </button>
           </div>

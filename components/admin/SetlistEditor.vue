@@ -20,6 +20,7 @@
           @keydown.enter.prevent="submit"
         />
       </div>
+
       <div class="min-w-0 flex-1 space-y-1">
         <label class="text-xs font-medium text-slate-700">가수</label>
         <input
@@ -30,10 +31,12 @@
           @keydown.enter.prevent="submit"
         />
       </div>
+
       <div class="space-y-2">
         <label class="text-xs font-medium text-slate-700">세션 구성</label>
 
-        <details class="relative">
+        <!-- ref 추가 -->
+        <details ref="sessionDetails" class="relative">
           <summary
             class="cursor-pointer rounded-md border bg-white px-3 py-2 text-sm"
           >
@@ -59,7 +62,7 @@
           <input
             v-model="etcDetail"
             type="text"
-            placeholder="예: EG3 / 리드 / 세컨"
+            placeholder="예: 코러스"
             class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -88,7 +91,6 @@
       </li>
 
       <li v-for="item in store.items" :key="item.id" class="px-4 py-3">
-        <!-- 읽기 모드 -->
         <div
           v-if="editingId !== item.id"
           class="flex items-center justify-between gap-3"
@@ -127,8 +129,8 @@
           </div>
         </div>
 
-        <!-- 같은 li 안에서 인라인 수정 -->
-        <div v-else class="flex flex-col gap-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 sm:flex-row sm:items-start sm:justify-between">
+        
+        <div v-else class="flex flex-col gap-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
           <div class="min-w-0 flex-1 space-y-3">
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
@@ -174,7 +176,7 @@
                   v-model="editDraft.etcDetail"
                   type="text"
                   placeholder="예: EG3"
-                  class="mt-1 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  class="ml-3 mt-2 w-50% max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -183,14 +185,14 @@
           <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="button"
-              class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+              class="rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
               @click="saveEdit(item.id)"
             >
               저장
             </button>
             <button
               type="button"
-              class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              class="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
               @click="cancelEdit"
             >
               취소
@@ -235,6 +237,8 @@ const sessionOptions = [
 
 const selectedSessions = ref<string[]>([]);
 const etcDetail = ref("");
+
+const sessionDetails = ref<HTMLDetailsElement | null>(null);
 
 const editingId = ref<string | null>(null);
 const editDraft = reactive({
@@ -291,6 +295,10 @@ function submit() {
 
   store.addItem(title.value, artist.value, sessions);
 
+  // 토글 닫기
+  if (sessionDetails.value) {
+  sessionDetails.value.open = false;
+}
   title.value = "";
   artist.value = "";
   selectedSessions.value = [];
