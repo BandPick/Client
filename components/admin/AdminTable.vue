@@ -1,12 +1,12 @@
 <template>
   <div class="overflow-x-auto rounded-xl border border-slate-200">
-    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+    <table class="w-full table-fixed divide-y divide-slate-200 text-center text-sm">
       <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
         <tr>
           <th
             v-for="col in columns"
             :key="col"
-            class="whitespace-nowrap px-4 py-3 border-r border-slate-200 last:border-r-0"
+            class="whitespace-nowrap px-2 py-3 border-r border-slate-200 last:border-r-0"
           >
             {{ col }}
           </th>
@@ -14,7 +14,7 @@
       </thead>
 
       <tbody class="divide-y divide-slate-100 bg-white">
-        <!-- 데이터 없을 때 -->
+        <!-- 데이터가 없는 경우 -->
         <tr v-if="!rows.length">
           <td
             :colspan="columns.length"
@@ -24,12 +24,12 @@
           </td>
         </tr>
 
-        <!-- 데이터 있을 때 -->
+        <!-- 데이터가 존재하는 경우 -->
         <tr v-for="(row, ri) in rows" :key="ri">
           <td
             v-for="(cell, ci) in row"
             :key="ci"
-            class="whitespace-nowrap px-4 py-3 text-slate-800 border-r border-slate-100 last:border-r-0"
+            class="whitespace-nowrap px-5 py-3 text-slate-800 border-r border-slate-100 last:border-r-0"
           >
             {{ cell }}
           </td>

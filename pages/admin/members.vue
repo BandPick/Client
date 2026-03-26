@@ -5,7 +5,7 @@
       전체 부원의 희망 곡·포지션·시간대를 조회합니다.
     </p>
 
-    <div class="flex mt-8">
+    <div class="w-full mt-8">
       <AdminTable
         :columns="columns"
         :rows="rows"
@@ -38,26 +38,26 @@ const columns = [
 // 목업 데이터
 const mockData = [
   {
-    name: "김민수",
+    name: "정시연",
     picks: [
-      "Hype Boy / 보컬",
-      "Ditto / 기타",
-      "Attention / 베이스",
-      "OMG / 드럼",
-      "ETA / 키보드",
+      "역성 / EG1",
+      "피차일반 / V, EG1",
+      "일상 / D",
+      "불시 / K2",
+      "박하사탕 / EG2",
     ],
-    time: "월/수 저녁",
+    time: "월 17:30~22:00",
   },
   {
-    name: "이서연",
+    name: "인세훈",
     picks: [
-      "Super Shy / 드럼",
-      "ETA / 보컬",
-      "Hurt / 기타",
-      "Cookie / 베이스",
-      "OMG / 키보드",
+      "high tide / D",
+      "John / D",
+      "야경 / D",
+      "불시 / D",
+      "개화 / D",
     ],
-    time: "주말 오후",
+    time: "수 17:30~22:00",
   },
 ];
 
