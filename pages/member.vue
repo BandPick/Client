@@ -1,14 +1,18 @@
 <template>
-  <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+  <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <section
+      class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8"
+    >
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
         공연 참가 정보 입력
       </h1>
 
-      <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1.05fr_1fr]">
+      <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="space-y-5 sm:space-y-6 min-w-0">
           <div>
-            <p class="mb-3 text-sm font-semibold text-slate-800">희망 곡 및 세션 (1~6지망)</p>
+            <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
+              희망 곡 및 세션 (1~6지망)
+            </p>
             <div class="space-y-4">
               <div
                 v-for="(pick, index) in form.picks"
@@ -16,7 +20,9 @@
                 class="py-1"
               >
                 <div class="grid grid-cols-[auto_1fr] items-center gap-2">
-                  <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
+                  <span
+                    class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600"
+                  >
                     {{ labels[index] }}
                   </span>
                   <select
@@ -35,19 +41,24 @@
                   </select>
                 </div>
 
-                <div v-if="pick.songId" class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      v-for="session in getSessionsForSong(pick.songId)"
-                      :key="`${pick.songId}-${session}`"
-                      type="button"
-                      class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
-                      :class="pick.sessions.includes(session)
+                <div
+                  v-if="pick.songId"
+                  class="mt-1.5 flex flex-wrap gap-2 pl-12 sm:pl-14"
+                >
+                  <button
+                    v-for="session in getDisplaySessionsForSong(pick.songId)"
+                    :key="`${pick.songId}-${session}`"
+                    type="button"
+                    class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
+                    :class="
+                      pick.sessions.includes(session)
                         ? 'border-blue-500 bg-blue-100 text-blue-700'
-                        : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'"
-                      @click="toggleSession(index, session)"
-                    >
-                      {{ session }}
-                    </button>
+                        : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'
+                    "
+                    @click="toggleSession(index, session)"
+                  >
+                    {{ getSessionLabel(pick.songId, session) }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -55,10 +66,16 @@
         </div>
 
         <div class="min-w-0">
-          <p class="mb-2 text-sm font-semibold text-slate-800">합주 가능 시간대 선택</p>
-          <div class="w-full max-w-full overflow-x-auto rounded-2xl border border-slate-200">
-            <div class="grid min-w-[620px] grid-cols-[64px_repeat(7,minmax(76px,1fr))] sm:min-w-[680px] sm:grid-cols-[70px_repeat(7,minmax(84px,1fr))]">
-              <div class="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500">
+          <p class="mb-2 text-base font-semibold text-slate-800 sm:text-lg">
+            합주 가능 시간대 선택
+          </p>
+          <div class="w-full rounded-2xl border border-slate-200">
+            <div
+              class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]"
+            >
+              <div
+                class="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500"
+              >
                 시간
               </div>
               <div
@@ -70,7 +87,9 @@
               </div>
 
               <template v-for="time in timeSlots" :key="`row-${time}`">
-                <div class="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500">
+                <div
+                  class="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500"
+                >
                   {{ time }}
                 </div>
                 <button
@@ -78,8 +97,14 @@
                   :key="`${day}-${time}`"
                   type="button"
                   class="h-9 border-b border-r border-slate-200 transition-colors last:border-r-0"
-                  :class="isSelectedSlot(day, time) ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white hover:bg-slate-100'"
-                  @click="toggleSlot(day, time)"
+                  :class="
+                    isSelectedSlot(day, time)
+                      ? 'bg-blue-100 hover:bg-blue-200'
+                      : 'bg-white hover:bg-slate-100'
+                  "
+                  @mousedown.prevent="startDrag(day, time)"
+                  @mouseenter="handleDragEnter(day, time)"
+                  @click="handleCellClick(day, time)"
                 />
               </template>
             </div>
@@ -87,7 +112,7 @@
           <div class="mt-3 flex items-center justify-between gap-3">
             <button
               type="button"
-              class="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              class="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               @click="resetSlots"
             >
               초기화
@@ -96,7 +121,9 @@
         </div>
       </div>
 
-      <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
         <NuxtLink
           to="/"
           class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
@@ -115,56 +142,44 @@
 </template>
 
 <script setup lang="ts">
-type Song = {
-  id: string;
-  title: string;
-  requiredSessions: string[];
-};
+import { songCatalog, type SessionCode } from "~/composables/useSessionCatalog";
 
 type Pick = {
   songId: string;
-  sessions: string[];
+  sessions: SessionCode[];
 };
 
 const labels = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
-const days = ["월", "화", "수", "목", "금", "토", "일"];
-const songs: Song[] = [
-  {
-    id: "hype-boy",
-    title: "Hype Boy - NewJeans",
-    requiredSessions: ["보컬", "K1", "K2", "베이스", "드럼", "코러스"],
-  },
-  {
-    id: "ditto",
-    title: "Ditto - NewJeans",
-    requiredSessions: ["보컬", "EG1", "EG2", "베이스", "드럼", "기타 타악기"],
-  },
-  {
-    id: "supernova",
-    title: "Supernova - aespa",
-    requiredSessions: ["보컬", "K1", "K2", "베이스", "드럼", "코러스"],
-  },
-  {
-    id: "every-moment",
-    title: "너의 모든 순간 - 성시경",
-    requiredSessions: ["보컬", "어쿠스틱 기타", "K1", "베이스", "드럼"],
-  },
-  {
-    id: "time-walk",
-    title: "시간을 걷는 소년 - 넬",
-    requiredSessions: ["보컬", "EG1", "EG2", "베이스", "드럼", "코러스"],
-  },
-];
+const days = ["월", "화", "수", "목", "금"];
+const songs = songCatalog;
+const defaultPercussionLabels: Record<string, string> = {
+  ditto: "코러스-1",
+  "every-moment": "쉐이커",
+};
+const percussionLabels = useState<Record<string, string>>(
+  "adminPercussionLabels",
+  () => ({ ...defaultPercussionLabels }),
+);
+for (const [songId, label] of Object.entries(defaultPercussionLabels)) {
+  if (!percussionLabels.value[songId]?.trim()) {
+    percussionLabels.value[songId] = label;
+  }
+}
 
 const form = reactive({
   picks: labels.map((_, idx): Pick => {
     if (idx === 0) return { songId: "hype-boy", sessions: ["K1"] };
-    if (idx === 1) return { songId: "ditto", sessions: ["보컬"] };
+    if (idx === 1) return { songId: "ditto", sessions: ["V"] };
     return { songId: "", sessions: [] };
   }),
 });
 
 const selectedSlots = ref<Set<string>>(new Set());
+const isDragging = ref(false);
+const dragDay = ref<string | null>(null);
+const dragMode = ref<"select" | "deselect">("select");
+const movedWhileDragging = ref(false);
+const suppressClickKey = ref<string | null>(null);
 
 const timeSlots = computed(() => {
   const slots: string[] = [];
@@ -175,19 +190,39 @@ const timeSlots = computed(() => {
   return slots;
 });
 
-function getSessionsForSong(songId: string) {
+function getSessionsForSong(songId: string): SessionCode[] {
   const song = songs.find((item) => item.id === songId);
   return song?.requiredSessions ?? [];
+}
+
+function isEtcEnabled(songId: string) {
+  const custom = percussionLabels.value[songId]?.trim();
+  return Boolean(custom);
+}
+
+function getDisplaySessionsForSong(songId: string): SessionCode[] {
+  return getSessionsForSong(songId).filter((session) => {
+    if (session !== "기타") return true;
+    return isEtcEnabled(songId);
+  });
+}
+
+function getSessionLabel(songId: string, session: SessionCode) {
+  if (session !== "기타") return session;
+  const custom = percussionLabels.value[songId]?.trim();
+  return custom ? `기타 (${custom})` : "";
 }
 
 function syncPickSessions(index: number) {
   const pick = form.picks[index];
   if (!pick) return;
-  const availableSessions = getSessionsForSong(pick.songId);
-  pick.sessions = pick.sessions.filter((session) => availableSessions.includes(session));
+  const availableSessions = getDisplaySessionsForSong(pick.songId);
+  pick.sessions = pick.sessions.filter((session) =>
+    availableSessions.includes(session),
+  );
 }
 
-function toggleSession(index: number, session: string) {
+function toggleSession(index: number, session: SessionCode) {
   const pick = form.picks[index];
   if (!pick?.songId) return;
   if (pick.sessions.includes(session)) {
@@ -205,20 +240,73 @@ function isSelectedSlot(day: string, time: string) {
   return selectedSlots.value.has(slotKey(day, time));
 }
 
-function toggleSlot(day: string, time: string) {
+function setSlot(day: string, time: string, selected: boolean) {
   const key = slotKey(day, time);
   const next = new Set(selectedSlots.value);
-  if (next.has(key)) {
-    next.delete(key);
-  } else {
+  if (selected) {
     next.add(key);
+  } else {
+    next.delete(key);
   }
   selectedSlots.value = next;
+}
+
+function toggleSlot(day: string, time: string) {
+  const key = slotKey(day, time);
+  setSlot(day, time, !selectedSlots.value.has(key));
+}
+
+function startDrag(day: string, time: string) {
+  isDragging.value = true;
+  movedWhileDragging.value = false;
+  dragDay.value = day;
+  dragMode.value = isSelectedSlot(day, time) ? "deselect" : "select";
+  setSlot(day, time, dragMode.value === "select");
+}
+
+function handleDragEnter(day: string, time: string) {
+  if (!isDragging.value || dragDay.value !== day) return;
+  movedWhileDragging.value = true;
+  setSlot(day, time, dragMode.value === "select");
+}
+
+function finishDrag() {
+  if (!isDragging.value) return;
+  if (movedWhileDragging.value && dragDay.value) {
+    suppressClickKey.value = dragDay.value;
+  }
+  isDragging.value = false;
+  movedWhileDragging.value = false;
+  dragDay.value = null;
+}
+
+function handleCellClick(day: string, time: string) {
+  if (suppressClickKey.value === day) {
+    suppressClickKey.value = null;
+    return;
+  }
+  toggleSlot(day, time);
 }
 
 function resetSlots() {
   selectedSlots.value = new Set();
 }
+
+watch(
+  () => percussionLabels.value,
+  () => {
+    form.picks.forEach((_, index) => syncPickSessions(index));
+  },
+  { deep: true },
+);
+
+onMounted(() => {
+  window.addEventListener("mouseup", finishDrag);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("mouseup", finishDrag);
+});
 
 useHead({
   title: "BandPick 부원",
