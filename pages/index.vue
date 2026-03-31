@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto min-h-[calc(100vh-120px)] w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+  <div class="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
     <section class="grid gap-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8 lg:grid-cols-2 lg:gap-10 lg:rounded-3xl lg:p-12">
       <div class="flex flex-col justify-center rounded-2xl bg-gradient-to-br from-blue-50 via-white to-slate-100 p-5 sm:p-8">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">BandPick</p>
@@ -9,16 +9,16 @@
           더 빠르게 시작하세요.
         </h1>
         <p class="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">
-          이름과 고유코드로 로그인하고, 부원/기획자 역할에 맞는 화면으로 바로 이동합니다.
+          역할에 맞는 로그인 정보를 입력하고, 부원/기획자 화면으로 바로 이동합니다.
         </p>
         <ul class="mt-6 space-y-2 text-sm text-slate-600">
           <li class="flex items-center gap-2">
             <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            이름 + 고유코드 기반 간편 로그인
+            부원: 이름 + 고유코드 로그인
           </li>
           <li class="flex items-center gap-2">
             <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            역할 선택 후 맞춤 화면 자동 이동
+            기획자: 밴드명 + 비밀번호 로그인
           </li>
           <li class="flex items-center gap-2">
             <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
@@ -30,29 +30,35 @@
       <form class="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 sm:p-8" @submit.prevent="handleSubmit">
         <p class="text-center text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Login</p>
         <h2 class="mt-2 text-center text-2xl font-bold tracking-tight text-slate-900">BandPick 입장</h2>
-        <p class="mt-2 text-center text-sm text-slate-500">이름과 고유코드를 입력해 로그인하세요.</p>
+        <p class="mt-2 text-center text-sm text-slate-500">
+          {{ role === "member" ? "이름과 고유코드를 입력해 로그인하세요." : "밴드명과 비밀번호를 입력해 로그인하세요." }}
+        </p>
 
         <div class="mt-6 space-y-4">
           <div>
-            <label for="name" class="mb-1 block text-sm font-medium text-slate-700">이름</label>
+            <label for="identifier" class="mb-1 block text-sm font-medium text-slate-700">
+              {{ role === "member" ? "이름" : "밴드명" }}
+            </label>
             <input
-              id="name"
-              v-model.trim="name"
+              id="identifier"
+              v-model.trim="identifier"
               type="text"
-              autocomplete="name"
-              placeholder="이름 입력"
+              :autocomplete="role === 'member' ? 'name' : 'organization'"
+              :placeholder="role === 'member' ? '이름 입력' : '밴드명 입력'"
               class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
           </div>
 
           <div>
-            <label for="code" class="mb-1 block text-sm font-medium text-slate-700">고유 코드 (학번/번호 뒷자리)</label>
+            <label for="secret" class="mb-1 block text-sm font-medium text-slate-700">
+              {{ role === "member" ? "고유 코드 (학번/번호 뒷자리)" : "비밀번호" }}
+            </label>
             <input
-              id="code"
-              v-model.trim="code"
+              id="secret"
+              v-model.trim="secret"
               type="password"
-              autocomplete="off"
-              placeholder="고유 코드 입력"
+              :autocomplete="role === 'member' ? 'off' : 'current-password'"
+              :placeholder="role === 'member' ? '고유 코드 입력' : '비밀번호 입력'"
               class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
           </div>
@@ -103,15 +109,17 @@
 <script setup lang="ts">
 type Role = "member" | "admin";
 
-const name = ref("");
-const code = ref("");
+const identifier = ref("");
+const secret = ref("");
 const role = ref<Role>("member");
 const errorMessage = ref("");
 const submitting = ref(false);
 
 function validateForm() {
-  if (!name.value || !code.value) {
-    return "이름과 고유 코드를 모두 입력해 주세요.";
+  if (!identifier.value || !secret.value) {
+    return role.value === "member"
+      ? "이름과 고유 코드를 모두 입력해 주세요."
+      : "밴드명과 비밀번호를 모두 입력해 주세요.";
   }
   return "";
 }

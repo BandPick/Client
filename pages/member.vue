@@ -3,9 +3,19 @@
     <section
       class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8"
     >
-      <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-        공연 참가 정보 입력
-      </h1>
+      <div class="flex items-start justify-between gap-4">
+        <h1
+          class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl"
+        >
+          공연 참가 정보 입력
+        </h1>
+        <div
+          class="hidden text-right text-xs font-medium text-slate-500 sm:block"
+        >
+          <p>신청 마감 시간 {{ deadlineDisplay }}</p>
+          <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
+        </div>
+      </div>
 
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="space-y-5 sm:space-y-6 min-w-0">
@@ -69,7 +79,9 @@
           <p class="mb-2 text-base font-semibold text-slate-800 sm:text-lg">
             합주 가능 시간대 선택
           </p>
-          <div class="w-full rounded-2xl border border-slate-200">
+          <div
+            class="w-full overflow-hidden rounded-2xl border border-slate-200"
+          >
             <div
               class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]"
             >
@@ -79,29 +91,36 @@
                 시간
               </div>
               <div
-                v-for="day in days"
+                v-for="(day, dayIndex) in days"
                 :key="`head-${day}`"
-                class="border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-600 last:border-r-0"
+                class="border-b border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-600"
+                :class="dayIndex === days.length - 1 ? '' : 'border-r'"
               >
                 {{ day }}
               </div>
 
-              <template v-for="time in timeSlots" :key="`row-${time}`">
+              <template
+                v-for="(time, timeIndex) in timeSlots"
+                :key="`row-${time}`"
+              >
                 <div
-                  class="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500"
+                  class="sticky left-0 z-10 border-r border-slate-200 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500"
+                  :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'"
                 >
-                  {{ time }}
+                  {{ timeIndex % 2 === 0 ? time : "" }}
                 </div>
                 <button
-                  v-for="day in days"
+                  v-for="(day, dayIndex) in days"
                   :key="`${day}-${time}`"
                   type="button"
-                  class="h-9 border-b border-r border-slate-200 transition-colors last:border-r-0"
-                  :class="
+                  class="h-9 border-slate-200 transition-colors"
+                  :class="[
+                    dayIndex === days.length - 1 ? '' : 'border-r',
+                    timeIndex === timeSlots.length - 1 ? '' : 'border-b',
                     isSelectedSlot(day, time)
                       ? 'bg-blue-100 hover:bg-blue-200'
-                      : 'bg-white hover:bg-slate-100'
-                  "
+                      : 'bg-white hover:bg-slate-100',
+                  ]"
                   @mousedown.prevent="startDrag(day, time)"
                   @mouseenter="handleDragEnter(day, time)"
                   @click="handleCellClick(day, time)"
@@ -180,6 +199,9 @@ const dragDay = ref<string | null>(null);
 const dragMode = ref<"select" | "deselect">("select");
 const movedWhileDragging = ref(false);
 const suppressClickKey = ref<string | null>(null);
+const deadlineAt = new Date("2026-04-05T22:00:00");
+const nowMs = ref(Date.now());
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 const timeSlots = computed(() => {
   const slots: string[] = [];
@@ -188,6 +210,28 @@ const timeSlots = computed(() => {
     slots.push(`${String(hour).padStart(2, "0")}:30`);
   }
   return slots;
+});
+
+const deadlineDisplay = computed(() => {
+  const month = String(deadlineAt.getMonth() + 1).padStart(2, "0");
+  const day = String(deadlineAt.getDate()).padStart(2, "0");
+  const hour = String(deadlineAt.getHours()).padStart(2, "0");
+  const minute = String(deadlineAt.getMinutes()).padStart(2, "0");
+  return `${deadlineAt.getFullYear()}-${month}-${day} ${hour}:${minute}`;
+});
+
+const timeRemainingLabel = computed(() => {
+  const diffMs = deadlineAt.getTime() - nowMs.value;
+  if (diffMs <= 0) return "마감됨";
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const daysLeft = Math.floor(totalSeconds / 86400);
+  const hoursLeft = Math.floor((totalSeconds % 86400) / 3600);
+  const minutesLeft = Math.floor((totalSeconds % 3600) / 60);
+  const secondsLeft = totalSeconds % 60;
+  if (daysLeft > 0) {
+    return `${daysLeft}일 ${hoursLeft}시간 ${minutesLeft}분`;
+  }
+  return `${hoursLeft}시간 ${minutesLeft}분 ${secondsLeft}초`;
 });
 
 function getSessionsForSong(songId: string): SessionCode[] {
@@ -302,10 +346,14 @@ watch(
 
 onMounted(() => {
   window.addEventListener("mouseup", finishDrag);
+  countdownTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("mouseup", finishDrag);
+  if (countdownTimer) clearInterval(countdownTimer);
 });
 
 useHead({
