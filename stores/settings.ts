@@ -20,6 +20,14 @@ export const useSettingsStore = defineStore("settings", {
    this.persist();
   },
 
+  /** 서버에서 받은 값을 한 번에 반영 (로컬 저장 포함) */
+  applyFromApi(minVocal: number, minSession: number, deadline: string) {
+   this.minVocal = minVocal;
+   this.minSession = minSession;
+   this.deadline = deadline;
+   this.persist();
+  },
+
   persist() {
    if (!import.meta.client) return;
 
