@@ -40,6 +40,7 @@ const nav = [
   { to: "/admin/members", label: "부원 데이터" },
   { to: "/admin/teams", label: "팀 매칭" },
   { to: "/admin/schedule", label: "합주 스케줄 생성" },
+  { to: "/admin/manager", label: "부원 정보 관리" },
   { to: "/admin/settings", label: "설정" },
 ] as const;
 
