@@ -1,17 +1,11 @@
 <template>
   <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-    <section
-      class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8"
-    >
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
       <div class="flex items-start justify-between gap-4">
-        <h1
-          class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl"
-        >
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           공연 참가 정보 입력
         </h1>
-        <div
-          class="hidden text-right text-xs font-medium text-slate-500 sm:block"
-        >
+        <div class="hidden text-right text-xs font-medium text-slate-500 sm:block">
           <p>신청 마감 시간 {{ deadlineDisplay }}</p>
           <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
         </div>
@@ -23,52 +17,57 @@
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
               희망 곡 및 세션 (1~6지망)
             </p>
+            <p v-if="setlistError"
+              class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {{ setlistError }}
+            </p>
             <div class="space-y-4">
-              <div
-                v-for="(pick, index) in form.picks"
-                :key="`pick-${index}`"
-                class="py-1"
-              >
+              <div v-for="(pick, index) in form.picks" :key="`pick-${index}`" class="py-1">
                 <div class="grid grid-cols-[auto_1fr] items-center gap-2">
-                  <span
-                    class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600"
-                  >
+                  <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
                     {{ labels[index] }}
                   </span>
-                  <select
-                    v-model="pick.songId"
-                    @change="syncPickSessions(index)"
-                    class="min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="">곡 선택</option>
-                    <option
-                      v-for="song in songs"
-                      :key="song.id"
-                      :value="song.id"
-                    >
-                      {{ song.title }}
+                  <select v-model="pick.songId" :disabled="setlistLoading" @change="syncPickSessions(index)"
+                    class="min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500">
+                    <option value="">
+                      {{
+                        setlistLoading
+                          ? "공연 곡 목록 불러오는 중…"
+                          : songs.length
+                            ? "곡 선택"
+                            : "등록된 공연 곡이 없습니다 (관리자 설정에서 셋리스트를 저장해 주세요)"
+                      }}
+                    </option>
+                    <option v-for="song in songs" :key="song.id" :value="song.id">
+                      {{ song.displayTitle }}
                     </option>
                   </select>
                 </div>
 
-                <div
-                  v-if="pick.songId"
-                  class="mt-1.5 flex flex-wrap gap-2 pl-12 sm:pl-14"
-                >
-                  <button
-                    v-for="session in getDisplaySessionsForSong(pick.songId)"
-                    :key="`${pick.songId}-${session}`"
-                    type="button"
-                    class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
-                    :class="
-                      pick.sessions.includes(session)
+                <div v-if="pick.songId"
+                  class="mt-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/90 px-3 py-3 pl-12 sm:pl-14">
+                  <div class="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div>
+                      <p class="text-xs font-semibold text-slate-800">
+                        희망 세션
+                        <span class="font-normal text-slate-500">(복수 선택)</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div v-if="getDisplaySessionsForSong(pick.songId).length" class="flex flex-wrap gap-2">
+                    <button v-for="session in getDisplaySessionsForSong(pick.songId)" :key="`${pick.songId}-${session}`"
+                      type="button" class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
+                      :class="pick.sessions.includes(session)
                         ? 'border-blue-500 bg-blue-100 text-blue-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'
-                    "
-                    @click="toggleSession(index, session)"
-                  >
-                    {{ getSessionLabel(pick.songId, session) }}
-                  </button>
+                        " @click="toggleSession(index, session)">
+                      {{ getSessionLabel(pick.songId, session) }}
+                    </button>
+                  </div>
+                  <p v-else class="text-xs text-amber-800">
+                    이 곡에는 등록된 세션이 없습니다. 관리자 설정의 공연 셋리스트에서 세션 구성을 저장했는지 확인해 주세요.
+                  </p>
                 </div>
               </div>
             </div>
@@ -79,80 +78,53 @@
           <p class="mb-2 text-base font-semibold text-slate-800 sm:text-lg">
             합주 가능 시간대 선택
           </p>
-          <div
-            class="w-full overflow-hidden rounded-2xl border border-slate-200"
-          >
-            <div
-              class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]"
-            >
+          <div class="w-full overflow-hidden rounded-2xl border border-slate-200">
+            <div class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]">
               <div
-                class="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500"
-              >
+                class="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500">
                 시간
               </div>
-              <div
-                v-for="(day, dayIndex) in days"
-                :key="`head-${day}`"
+              <div v-for="(day, dayIndex) in days" :key="`head-${day}`"
                 class="border-b border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-600"
-                :class="dayIndex === days.length - 1 ? '' : 'border-r'"
-              >
+                :class="dayIndex === days.length - 1 ? '' : 'border-r'">
                 {{ day }}
               </div>
 
-              <template
-                v-for="(time, timeIndex) in timeSlots"
-                :key="`row-${time}`"
-              >
+              <template v-for="(time, timeIndex) in timeSlots" :key="`row-${time}`">
                 <div
                   class="sticky left-0 z-10 border-r border-slate-200 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500"
-                  :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'"
-                >
+                  :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'">
                   {{ timeIndex % 2 === 0 ? time : "" }}
                 </div>
-                <button
-                  v-for="(day, dayIndex) in days"
-                  :key="`${day}-${time}`"
-                  type="button"
-                  class="h-9 border-slate-200 transition-colors"
-                  :class="[
+                <button v-for="(day, dayIndex) in days" :key="`${day}-${time}`" type="button"
+                  class="h-9 border-slate-200 transition-colors" :class="[
                     dayIndex === days.length - 1 ? '' : 'border-r',
                     timeIndex === timeSlots.length - 1 ? '' : 'border-b',
                     isSelectedSlot(day, time)
                       ? 'bg-blue-100 hover:bg-blue-200'
                       : 'bg-white hover:bg-slate-100',
-                  ]"
-                  @mousedown.prevent="startDrag(day, time)"
-                  @mouseenter="handleDragEnter(day, time)"
-                  @click="handleCellClick(day, time)"
-                />
+                  ]" @mousedown.prevent="startDrag(day, time)" @mouseenter="handleDragEnter(day, time)"
+                  @click="handleCellClick(day, time)" />
               </template>
             </div>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
-            <button
-              type="button"
+            <button type="button"
               class="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              @click="resetSlots"
-            >
+              @click="resetSlots">
               초기화
             </button>
           </div>
         </div>
       </div>
 
-      <div
-        class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <NuxtLink
-          to="/"
-          class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
+      <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <NuxtLink to="/"
+          class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
           로그인 화면으로
         </NuxtLink>
-        <button
-          type="button"
-          class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
-        >
+        <button type="button"
+          class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700">
           데이터 저장하기
         </button>
       </div>
@@ -161,36 +133,25 @@
 </template>
 
 <script setup lang="ts">
-import { songCatalog, type SessionCode } from "~/composables/useSessionCatalog";
+import {
+  type MemberSetlistSong,
+  useMemberSetlistLoader,
+} from "~/composables/useMemberSetlistLoader";
 
 type Pick = {
   songId: string;
-  sessions: SessionCode[];
+  sessions: string[];
 };
 
 const labels = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
 const days = ["월", "화", "수", "목", "금"];
-const songs = songCatalog;
-const defaultPercussionLabels: Record<string, string> = {
-  ditto: "코러스-1",
-  "every-moment": "쉐이커",
-};
-const percussionLabels = useState<Record<string, string>>(
-  "adminPercussionLabels",
-  () => ({ ...defaultPercussionLabels }),
-);
-for (const [songId, label] of Object.entries(defaultPercussionLabels)) {
-  if (!percussionLabels.value[songId]?.trim()) {
-    percussionLabels.value[songId] = label;
-  }
-}
+const songs = ref<MemberSetlistSong[]>([]);
+const setlistLoading = ref(true);
+const setlistError = ref("");
+const { loadSongsForMemberForm } = useMemberSetlistLoader();
 
 const form = reactive({
-  picks: labels.map((_, idx): Pick => {
-    if (idx === 0) return { songId: "hype-boy", sessions: ["K1"] };
-    if (idx === 1) return { songId: "ditto", sessions: ["V"] };
-    return { songId: "", sessions: [] };
-  }),
+  picks: labels.map((): Pick => ({ songId: "", sessions: [] })),
 });
 
 const selectedSlots = ref<Set<string>>(new Set());
@@ -234,27 +195,22 @@ const timeRemainingLabel = computed(() => {
   return `${hoursLeft}시간 ${minutesLeft}분 ${secondsLeft}초`;
 });
 
-function getSessionsForSong(songId: string): SessionCode[] {
-  const song = songs.find((item) => item.id === songId);
-  return song?.requiredSessions ?? [];
+function getSessionsForSong(songId: string): string[] {
+  const song = songs.value.find((item) => item.id === songId);
+  return song?.sessions ?? [];
 }
 
-function isEtcEnabled(songId: string) {
-  const custom = percussionLabels.value[songId]?.trim();
-  return Boolean(custom);
+function getDisplaySessionsForSong(songId: string): string[] {
+  return getSessionsForSong(songId);
 }
 
-function getDisplaySessionsForSong(songId: string): SessionCode[] {
-  return getSessionsForSong(songId).filter((session) => {
-    if (session !== "기타") return true;
-    return isEtcEnabled(songId);
-  });
-}
-
-function getSessionLabel(songId: string, session: SessionCode) {
-  if (session !== "기타") return session;
-  const custom = percussionLabels.value[songId]?.trim();
-  return custom ? `기타 (${custom})` : "";
+function getSessionLabel(_songId: string, session: string) {
+  const m = session.match(/^기타\((.*)\)$/);
+  if (m) {
+    const inner = (m[1] ?? "").trim();
+    return inner ? `기타 (${inner})` : "기타";
+  }
+  return session;
 }
 
 function syncPickSessions(index: number) {
@@ -266,7 +222,7 @@ function syncPickSessions(index: number) {
   );
 }
 
-function toggleSession(index: number, session: SessionCode) {
+function toggleSession(index: number, session: string) {
   const pick = form.picks[index];
   if (!pick?.songId) return;
   if (pick.sessions.includes(session)) {
@@ -336,15 +292,19 @@ function resetSlots() {
   selectedSlots.value = new Set();
 }
 
-watch(
-  () => percussionLabels.value,
-  () => {
-    form.picks.forEach((_, index) => syncPickSessions(index));
-  },
-  { deep: true },
-);
+onMounted(async () => {
+  setlistLoading.value = true;
+  setlistError.value = "";
+  try {
+    songs.value = await loadSongsForMemberForm();
+  } catch {
+    setlistError.value =
+      "공연 셋리스트를 불러오지 못했습니다. 네트워크와 서버 주소(NUXT_PUBLIC_API_BASE)를 확인해 주세요.";
+    songs.value = [];
+  } finally {
+    setlistLoading.value = false;
+  }
 
-onMounted(() => {
   window.addEventListener("mouseup", finishDrag);
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
@@ -355,6 +315,14 @@ onBeforeUnmount(() => {
   window.removeEventListener("mouseup", finishDrag);
   if (countdownTimer) clearInterval(countdownTimer);
 });
+
+watch(
+  songs,
+  () => {
+    form.picks.forEach((_, index) => syncPickSessions(index));
+  },
+  { deep: true },
+);
 
 useHead({
   title: "BandPick 부원",
