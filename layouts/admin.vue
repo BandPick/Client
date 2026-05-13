@@ -41,6 +41,7 @@ const nav = [
   { to: "/admin/teams", label: "팀 매칭" },
   { to: "/admin/schedule", label: "합주 스케줄 생성" },
   { to: "/admin/manager", label: "부원 정보 관리" },
+  { to: "/admin/checklist", label: "체크리스트" },
   { to: "/admin/settings", label: "설정" },
 ] as const;
 
