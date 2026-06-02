@@ -4,15 +4,15 @@
 
     <div class="mt-6 flex flex-wrap gap-2">
       <button type="button"
-        class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
-        @click="activeTab = 'matrix'">
+        class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="isLoadingData" @click="handleLoadData">
         <svg class="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="7 10 12 15 17 10" />
           <line x1="12" x2="12" y1="15" y2="3" />
         </svg>
-        데이터 불러오기
+        {{ isLoadingData ? "불러오는 중..." : "데이터 불러오기" }}
       </button>
       <button type="button"
         class="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
@@ -28,6 +28,10 @@
         {{ isMatching ? "매칭 계산 중..." : "팀 매칭하기" }}
       </button>
     </div>
+
+    <p v-if="loadError" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      {{ loadError }}
+    </p>
   </div>
 
   <section v-if="activeTab === null"
@@ -59,7 +63,7 @@
         </thead>
 
         <tbody>
-          <tr v-for="song in SETLIST" :key="song" class="align-top hover:bg-slate-50 transition-colors">
+          <tr v-for="song in setlistTitles" :key="song" class="align-top hover:bg-slate-50 transition-colors">
 
             <th
               class="sticky left-0 z-[1] border-b border-r border-slate-200 bg-white px-3 py-3 text-center font-medium text-slate-800">
@@ -156,28 +160,79 @@ type MemberPick = {
 };
 
 const SESSIONS = ["V", "D", "B", "EG1", "EG2", "AG", "K1", "K2", "기타"] as const;
-const SETLIST = ["역성"] as const;
 
-const MOCK_MEMBER_DATA: MemberPick[] = [
-  { name: "정시연", picks: ["역성 / EG1"] }
-];
+type MemberFormMemberResponse = {
+  userId: number;
+  name: string;
+  picks: string[];
+};
 
+type SetlistItem = {
+  id: number;
+  title: string;
+  artist: string;
+  positions: string[];
+};
+
+const config = useRuntimeConfig();
+const memberData = ref<MemberPick[]>([]);
+const setlistTitles = ref<string[]>([]);
 const activeTab = ref<"matrix" | "matching" | null>(null);
 const isMatching = ref(false);
+const isLoadingData = ref(false);
+const loadError = ref("");
+
+const formsApiUrl = computed(() => {
+  const host = String(config.public.apiBase).replace(/\/$/, "");
+  return `${host}/api/v1/forms`;
+});
+
+const setlistsApiUrl = computed(() => {
+  const host = String(config.public.apiBase).replace(/\/$/, "");
+  return `${host}/api/v1/setlists`;
+});
+
+async function handleLoadData() {
+  isLoadingData.value = true;
+  loadError.value = "";
+
+  try {
+    const [forms, setlists] = await Promise.all([
+      $fetch<MemberFormMemberResponse[]>(formsApiUrl.value, { method: "GET" }),
+      $fetch<SetlistItem[]>(setlistsApiUrl.value, { method: "GET" }),
+    ]);
+
+    memberData.value = forms.map((form) => ({
+      name: form.name,
+      picks: form.picks,
+    }));
+
+    const titlesFromSetlists = setlists.map((item) => item.title);
+    const titlesFromForms = forms.flatMap((form) =>
+      form.picks.map((pick) => pick.split(" / ")[0]?.trim() ?? "").filter(Boolean),
+    );
+    setlistTitles.value = [...new Set([...titlesFromSetlists, ...titlesFromForms])];
+    activeTab.value = "matrix";
+  } catch {
+    loadError.value = "form 데이터를 불러오지 못했습니다. 서버 상태와 API 경로를 확인해주세요.";
+  } finally {
+    isLoadingData.value = false;
+  }
+}
 
 const songMatrix = computed<Record<string, Record<string, string[]>>>(() => {
   const matrix: Record<string, Record<string, string[]>> = {};
 
-  SETLIST.forEach((song) => {
+  setlistTitles.value.forEach((song) => {
     matrix[song] = {};
     SESSIONS.forEach((session) => {
       matrix[song][session] = [];
     });
   });
 
-  MOCK_MEMBER_DATA.forEach((member) => {
+  memberData.value.forEach((member) => {
     member.picks.forEach((pick, index) => {
-      const [songName, session] = pick.split(' / ');
+      const [songName, session] = pick.split(" / ");
       if (matrix[songName]?.[session]) {
         matrix[songName][session].push(`${index + 1}. ${member.name}`);
       }
@@ -187,7 +242,7 @@ const songMatrix = computed<Record<string, Record<string, string[]>>>(() => {
 });
 
 const matchingResults = computed(() => {
-  return SETLIST.map((song) => {
+  return setlistTitles.value.map((song) => {
     const members: Array<{ session: string; name: string }> = [];
     SESSIONS.forEach((session) => {
       const candidates = songMatrix.value[song][session];
@@ -195,7 +250,7 @@ const matchingResults = computed(() => {
       if (topCandidate) {
         members.push({
           session,
-          name: topCandidate.split(" (")[0],
+          name: topCandidate.replace(/^\d\.\s*/, ""),
         });
       }
     });
