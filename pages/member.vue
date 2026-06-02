@@ -22,6 +22,12 @@
       >
         {{ saveFeedback }}
       </p>
+      <p
+        v-if="settingsError"
+        class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+      >
+        {{ settingsError }}
+      </p>
 
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="min-w-0 space-y-5 sm:space-y-6">
@@ -202,9 +208,21 @@
         <button
           type="button"
           class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+          :disabled="saving || settingsLoading || isDeadlinePassed"
+          :class="
+            saving || settingsLoading || isDeadlinePassed
+              ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
+              : ''
+          "
           @click="handleSave"
         >
-          데이터 저장하기
+          {{
+            saving
+              ? "저장 중..."
+              : isDeadlinePassed
+                ? "신청 마감됨"
+                : "데이터 저장하기"
+          }}
         </button>
       </div>
     </section>
@@ -216,6 +234,7 @@ import {
   type MemberSetlistSong,
   useMemberSetlistLoader,
 } from "~/composables/useMemberSetlistLoader";
+import { useMemberFormApi } from "~/composables/useMemberFormApi";
 
 type Pick = {
   songId: string;
@@ -233,6 +252,10 @@ const setlistError = ref("");
 const saveFeedback = ref("");
 const saveFeedbackType = ref<"error" | "success">("error");
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
+const { fetchSettings, submitMemberForm } = useMemberFormApi();
+const settingsLoading = ref(true);
+const settingsError = ref("");
+const saving = ref(false);
 
 function createEmptyPick(): Pick {
   return { songId: "", sessions: [] };
@@ -247,7 +270,7 @@ const isDragging = ref(false);
 const dragDay = ref<string | null>(null);
 const dragMode = ref<"select" | "deselect">("select");
 const movedWhileDragging = ref(false);
-const deadlineAt = new Date("2026-04-05T22:00:00");
+const deadlineAt = ref<Date | null>(null);
 const nowMs = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -267,15 +290,18 @@ const filledPickCount = computed(() => {
 });
 
 const deadlineDisplay = computed(() => {
-  const month = String(deadlineAt.getMonth() + 1).padStart(2, "0");
-  const day = String(deadlineAt.getDate()).padStart(2, "0");
-  const hour = String(deadlineAt.getHours()).padStart(2, "0");
-  const minute = String(deadlineAt.getMinutes()).padStart(2, "0");
-  return `${deadlineAt.getFullYear()}-${month}-${day} ${hour}:${minute}`;
+  if (!deadlineAt.value) return "미설정";
+  const month = String(deadlineAt.value.getMonth() + 1).padStart(2, "0");
+  const day = String(deadlineAt.value.getDate()).padStart(2, "0");
+  const hour = String(deadlineAt.value.getHours()).padStart(2, "0");
+  const minute = String(deadlineAt.value.getMinutes()).padStart(2, "0");
+  return `${deadlineAt.value.getFullYear()}-${month}-${day} ${hour}:${minute}`;
 });
 
 const timeRemainingLabel = computed(() => {
-  const diffMs = deadlineAt.getTime() - nowMs.value;
+  if (settingsLoading.value) return "설정 불러오는 중";
+  if (!deadlineAt.value) return "미설정";
+  const diffMs = deadlineAt.value.getTime() - nowMs.value;
   if (diffMs <= 0) return "마감됨";
   const totalSeconds = Math.floor(diffMs / 1000);
   const daysLeft = Math.floor(totalSeconds / 86400);
@@ -286,6 +312,11 @@ const timeRemainingLabel = computed(() => {
     return `${daysLeft}일 ${hoursLeft}시간 ${minutesLeft}분`;
   }
   return `${hoursLeft}시간 ${minutesLeft}분 ${secondsLeft}초`;
+});
+
+const isDeadlinePassed = computed(() => {
+  if (!deadlineAt.value) return false;
+  return deadlineAt.value.getTime() <= nowMs.value;
 });
 
 function pickLabel(index: number) {
@@ -386,17 +417,59 @@ function validatePicksForSave(): string {
   return "";
 }
 
-function handleSave() {
+async function handleSave() {
   saveFeedback.value = "";
+  if (saving.value) return;
+  if (settingsLoading.value) {
+    saveFeedbackType.value = "error";
+    saveFeedback.value = "마감 설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.";
+    return;
+  }
+  if (!deadlineAt.value) {
+    saveFeedbackType.value = "error";
+    saveFeedback.value = "마감 시간이 설정되지 않았습니다. 관리자에게 문의해 주세요.";
+    return;
+  }
+  if (isDeadlinePassed.value) {
+    saveFeedbackType.value = "error";
+    saveFeedback.value = "신청 마감 시간이 지나 제출할 수 없습니다.";
+    return;
+  }
   const validationError = validatePicksForSave();
   if (validationError) {
     saveFeedbackType.value = "error";
     saveFeedback.value = validationError;
     return;
   }
-  saveFeedbackType.value = "success";
-  saveFeedback.value =
-    "입력 조건을 충족했습니다. (서버 저장 API 연동은 추후 적용 예정)";
+  const requestBody = {
+    picks: form.picks
+      .map((pick, index) => ({ pick, index }))
+      .filter(({ pick }) => pick.songId && pick.sessions.length > 0)
+      .map(({ pick, index }) => ({
+        priority: index + 1,
+        songId: Number(pick.songId),
+        sessions: [...pick.sessions],
+      }))
+      .filter((pick) => Number.isFinite(pick.songId)),
+    availableSlots: Array.from(selectedSlots.value).sort(),
+  };
+
+  saving.value = true;
+  try {
+    const response = await submitMemberForm(requestBody);
+    saveFeedbackType.value = response.success ? "success" : "error";
+    saveFeedback.value = response.message
+      ? response.message
+      : response.success
+        ? "신청 정보가 저장되었습니다."
+        : "신청 저장에 실패했습니다.";
+  } catch {
+    saveFeedbackType.value = "error";
+    saveFeedback.value =
+      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.";
+  } finally {
+    saving.value = false;
+  }
 }
 
 function slotKey(day: string, time: string) {
@@ -444,6 +517,26 @@ function resetSlots() {
 }
 
 onMounted(async () => {
+  settingsLoading.value = true;
+  settingsError.value = "";
+  try {
+    const settings = await fetchSettings();
+    const parsed = new Date(settings.deadline);
+    if (Number.isNaN(parsed.getTime())) {
+      settingsError.value =
+        "마감 시간 형식을 해석할 수 없습니다. 관리자 설정을 확인해 주세요.";
+      deadlineAt.value = null;
+    } else {
+      deadlineAt.value = parsed;
+    }
+  } catch {
+    settingsError.value =
+      "마감 설정을 불러오지 못했습니다. 관리자/서버 상태를 확인해 주세요.";
+    deadlineAt.value = null;
+  } finally {
+    settingsLoading.value = false;
+  }
+
   setlistLoading.value = true;
   setlistError.value = "";
   try {

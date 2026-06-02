@@ -10,6 +10,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || "http://localhost:8080/api/v1",
+      apiMemberSubmissionPath:
+        process.env.NUXT_PUBLIC_API_MEMBER_SUBMISSION_PATH ||
+        "members/submissions",
     },
   },
 });

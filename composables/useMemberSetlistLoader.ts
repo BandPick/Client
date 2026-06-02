@@ -17,6 +17,15 @@ export type MemberSetlistSong = {
 /** `stores/setlist.ts` 와 동일 — 관리자 셋리스트 로컬 저장소 */
 const LOCAL_SETLIST_STORAGE_KEY = "bandpick-setlist-v1";
 
+function joinApiPath(base: string, pathWithoutPrefix: string): string {
+  const cleanBase = String(base).replace(/\/$/, "");
+  const cleanPath = String(pathWithoutPrefix).replace(/^\/+/, "");
+  if (/(^|\/)api\/v1$/.test(cleanBase)) {
+    return `${cleanBase}/${cleanPath}`;
+  }
+  return `${cleanBase}/api/v1/${cleanPath}`;
+}
+
 function normalizeSessionStrings(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -50,8 +59,7 @@ export function useMemberSetlistLoader() {
   const config = useRuntimeConfig();
 
   const setlistsUrl = computed(() => {
-    const base = String(config.public.apiBase).replace(/\/$/, "");
-    return `${base}/setlists`;
+    return joinApiPath(config.public.apiBase, "setlists");
   });
 
   async function loadSongsForMemberForm(): Promise<MemberSetlistSong[]> {
