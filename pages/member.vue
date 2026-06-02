@@ -123,11 +123,19 @@
           class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
           로그인 화면으로
         </NuxtLink>
-        <button type="button"
-          class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700">
-          데이터 저장하기
+        <button type="button" :disabled="saving"
+          class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
+          @click="handleSave">
+          {{ saving ? "저장 중…" : "데이터 저장하기" }}
         </button>
       </div>
+      <p v-if="saveMessage"
+        class="mt-3 rounded-lg border px-3 py-2 text-sm"
+        :class="saveError
+          ? 'border-rose-200 bg-rose-50 text-rose-700'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-800'">
+        {{ saveMessage }}
+      </p>
     </section>
   </div>
 </template>
@@ -137,6 +145,13 @@ import {
   type MemberSetlistSong,
   useMemberSetlistLoader,
 } from "~/composables/useMemberSetlistLoader";
+import {
+  buildMemberFormAvailabilities,
+  buildMemberFormPicks,
+  getScheduleWeekStart,
+} from "~/composables/useMemberFormPayload";
+import { useMemberFormApi } from "~/composables/useMemberFormApi";
+import { useAuthApi, type LoginUser } from "~/composables/useAuthApi";
 
 type Pick = {
   songId: string;
@@ -148,7 +163,13 @@ const days = ["월", "화", "수", "목", "금"];
 const songs = ref<MemberSetlistSong[]>([]);
 const setlistLoading = ref(true);
 const setlistError = ref("");
+const saving = ref(false);
+const saveMessage = ref("");
+const saveError = ref(false);
+const authUser = ref<LoginUser | null>(null);
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
+const { saveMemberForm } = useMemberFormApi();
+const { loadAuthUser } = useAuthApi();
 
 const form = reactive({
   picks: labels.map((): Pick => ({ songId: "", sessions: [] })),
@@ -292,7 +313,86 @@ function resetSlots() {
   selectedSlots.value = new Set();
 }
 
+function validateSaveForm(): string {
+  if (!authUser.value) {
+    return "로그인 정보가 없습니다. 로그인 화면에서 다시 로그인해 주세요.";
+  }
+
+  const picks = buildMemberFormPicks(form.picks);
+  if (!picks.length) {
+    return "희망 곡과 세션을 최소 1개 이상 선택해 주세요.";
+  }
+
+  const hasPickWithoutSession = form.picks.some(
+    (pick) => pick.songId && !pick.sessions.length,
+  );
+  if (hasPickWithoutSession) {
+    return "곡을 선택한 경우 희망 세션도 함께 선택해 주세요.";
+  }
+
+  const availabilities = buildMemberFormAvailabilities(
+    selectedSlots.value,
+    timeSlots.value,
+    getScheduleWeekStart(deadlineAt),
+  );
+  if (!availabilities.length) {
+    return "합주 가능 시간대를 최소 1개 이상 선택해 주세요.";
+  }
+
+  return "";
+}
+
+async function handleSave() {
+  saveMessage.value = "";
+  saveError.value = false;
+
+  const validationError = validateSaveForm();
+  if (validationError) {
+    saveMessage.value = validationError;
+    saveError.value = true;
+    return;
+  }
+
+  const user = authUser.value!;
+  const picks = buildMemberFormPicks(form.picks);
+  const availabilities = buildMemberFormAvailabilities(
+    selectedSlots.value,
+    timeSlots.value,
+    getScheduleWeekStart(deadlineAt),
+  );
+
+  saving.value = true;
+  try {
+    const response = await saveMemberForm(user.id, {
+      userId: user.id,
+      picks,
+      availabilities,
+    });
+    saveMessage.value = response.message || "저장이 완료되었습니다.";
+    saveError.value = false;
+  } catch (error: unknown) {
+    saveError.value = true;
+    if (error && typeof error === "object" && "data" in error) {
+      const data = (error as { data?: unknown }).data;
+      if (typeof data === "string" && data.trim()) {
+        saveMessage.value = data;
+        return;
+      }
+    }
+    saveMessage.value =
+      "저장에 실패했습니다. 입력값과 서버 연결 상태를 확인해 주세요.";
+  } finally {
+    saving.value = false;
+  }
+}
+
 onMounted(async () => {
+  authUser.value = loadAuthUser();
+  if (!authUser.value) {
+    saveMessage.value = "로그인이 필요합니다. 로그인 화면에서 다시 로그인해 주세요.";
+    saveError.value = true;
+  }
+
   setlistLoading.value = true;
   setlistError.value = "";
   try {

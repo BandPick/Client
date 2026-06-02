@@ -101,7 +101,7 @@ const secret = ref("");
 const role = ref<Role>("member");
 const errorMessage = ref("");
 const submitting = ref(false);
-const { login } = useAuthApi();
+const { login, saveAuthUser } = useAuthApi();
 
 function validateForm() {
   if (!identifier.value || !secret.value) {
@@ -128,11 +128,12 @@ async function handleSubmit() {
         code: secret.value,
       });
 
-      if (!response.success) {
+      if (!response.success || !response.user) {
         errorMessage.value = response.message || "로그인에 실패했습니다.";
         return;
       }
 
+      saveAuthUser(response.user);
       await navigateTo("/member");
       return;
     }
