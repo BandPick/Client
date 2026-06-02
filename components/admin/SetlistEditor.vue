@@ -221,10 +221,8 @@ const config = useRuntimeConfig();
 
 const setlistApiUrl = computed(() => {
   const host = String(config.public.apiBase).replace(/\/$/, "");
-  const raw =
-    (config.public as { apiSetlistPath?: string }).apiSetlistPath ?? "setlists";
-  const path = String(raw).replace(/^\/+|\/+$/g, "");
-  return `${host}/${path}`;
+  const path = String(config.public.apiSetlistPath).replace(/^\/+|\/+$/g, "");
+  return `${host}/api/v1/${path}`;
 });
 
 onMounted(() => {

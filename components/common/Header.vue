@@ -6,6 +6,12 @@
       <NuxtLink to="/" class="flex items-center gap-2 text-xl font-bold text-blue-600">
         🎸 BandPick
       </NuxtLink>
+
+      <nav class="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="주요 메뉴">
+        <NuxtLink to="/admin" :class="linkClass('admin')">
+          기획자
+        </NuxtLink>
+      </nav>
     </div>
   </header>
 </template>
