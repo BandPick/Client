@@ -52,10 +52,61 @@
             <label for="secret" class="mb-1 block text-sm font-medium text-slate-700">
               {{ role === "member" ? "고유 코드 (학번/번호 뒷자리)" : "비밀번호" }}
             </label>
-            <input id="secret" v-model.trim="secret" type="password"
-              :autocomplete="role === 'member' ? 'off' : 'current-password'"
-              :placeholder="role === 'member' ? '고유 코드 입력' : '비밀번호 입력'"
-              class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+            <div class="relative">
+              <input
+                id="secret"
+                v-model.trim="secret"
+                :type="showSecret ? 'text' : 'password'"
+                :autocomplete="role === 'member' ? 'off' : 'current-password'"
+                :placeholder="role === 'member' ? '고유 코드 입력' : '비밀번호 입력'"
+                class="w-full rounded-xl border border-slate-300 py-3 pl-4 pr-11 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="button"
+                tabindex="-1"
+                class="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                :aria-label="showSecret ? '입력값 숨기기' : '입력값 보기'"
+                @click="showSecret = !showSecret"
+              >
+                <!-- 글자가 보일 때: 눈 감음(숨기기), 가려질 때: 눈 뜸(보기) -->
+                <svg
+                  v-if="showSecret"
+                  class="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg
+                  v-else
+                  class="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M1 1l22 22"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <fieldset>
@@ -98,10 +149,25 @@ type Role = "member" | "admin";
 
 const identifier = ref("");
 const secret = ref("");
+const showSecret = ref(false);
 const role = ref<Role>("member");
 const errorMessage = ref("");
 const submitting = ref(false);
-const { login, saveAuthUser } = useAuthApi();
+const { login } = useAuthApi();
+const config = useRuntimeConfig();
+
+function isLoginNetworkError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { message?: string; statusCode?: number; cause?: unknown };
+  if (err.statusCode === 0) return true;
+  const msg = String(err.message ?? "").toLowerCase();
+  return (
+    msg.includes("fetch") ||
+    msg.includes("network") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("econnrefused")
+  );
+}
 
 function validateForm() {
   if (!identifier.value || !secret.value) {
@@ -140,8 +206,26 @@ async function handleSubmit() {
 
     // 기획자 인증은 별도 구현 전까지 기존 더미 라우팅 유지
     await navigateTo("/admin");
-  } catch {
-    errorMessage.value = "서버 통신 중 오류가 발생했습니다.";
+  } catch (error) {
+    if (import.meta.dev && role.value === "member" && isLoginNetworkError(error)) {
+      console.warn(
+        "[BandPick] 로그인 API에 연결되지 않아 개발 모드에서 /member로 이동합니다.",
+      );
+      await navigateTo("/member");
+      return;
+    }
+
+    const apiBase = String(config.public.apiBase);
+    if (isLoginNetworkError(error)) {
+      errorMessage.value = `백엔드 서버에 연결할 수 없습니다. Spring Boot가 실행 중인지 확인해 주세요. (요청 주소: ${apiBase}/auth/login)`;
+      return;
+    }
+
+    const err = error as { data?: { message?: string }; message?: string };
+    errorMessage.value =
+      err.data?.message ||
+      err.message ||
+      "서버 통신 중 오류가 발생했습니다.";
   } finally {
     submitting.value = false;
   }

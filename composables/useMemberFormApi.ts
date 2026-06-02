@@ -1,43 +1,62 @@
-export type MemberFormPickRequest = {
+import type { SettingsResponse } from "~/types/settings";
+
+export type MemberPickRequest = {
   priority: number;
-  setlistId: number;
-  desiredPosition: string;
-  desiredExtra?: string;
+  songId: number;
+  sessions: string[];
 };
 
-export type MemberFormAvailabilityRequest = {
-  availableFrom: string;
-  availableTo: string;
+export type MemberSubmissionRequest = {
+  picks: MemberPickRequest[];
+  availableSlots: string[];
 };
 
-export type MemberFormSaveRequest = {
-  userId: number;
-  picks: MemberFormPickRequest[];
-  availabilities: MemberFormAvailabilityRequest[];
+export type MemberSubmissionResponse = {
+  success: boolean;
+  message?: string;
 };
 
-export type MemberFormSaveResponse = {
-  savedPickCount: number;
-  savedAvailabilityCount: number;
-  message: string;
-};
+function joinApiPath(base: string, pathWithoutPrefix: string): string {
+  const cleanBase = String(base).replace(/\/$/, "");
+  const cleanPath = String(pathWithoutPrefix).replace(/^\/+/, "");
+  if (/(^|\/)api\/v1$/.test(cleanBase)) {
+    return `${cleanBase}/${cleanPath}`;
+  }
+  return `${cleanBase}/api/v1/${cleanPath}`;
+}
 
 export function useMemberFormApi() {
   const config = useRuntimeConfig();
 
-  const apiBaseUrl = computed(() =>
-    String(config.public.apiBase).replace(/\/$/, ""),
+  const settingsUrl = computed(() =>
+    joinApiPath(config.public.apiBase, "settings"),
   );
 
-  async function saveMemberForm(userId: number, payload: MemberFormSaveRequest) {
-    return await $fetch<MemberFormSaveResponse>(
-      `${apiBaseUrl.value}/users/${userId}/forms`,
-      {
-        method: "POST",
-        body: payload,
-      },
-    );
+  const submissionUrl = computed(() => {
+    const path =
+      (config.public as { apiMemberSubmissionPath?: string })
+        .apiMemberSubmissionPath ?? "members/submissions";
+    return joinApiPath(config.public.apiBase, path);
+  });
+
+  async function fetchSettings() {
+    return await $fetch<SettingsResponse>(settingsUrl.value, {
+      method: "GET",
+    });
   }
 
-  return { saveMemberForm };
+  async function submitMemberForm(body: MemberSubmissionRequest) {
+    return await $fetch<MemberSubmissionResponse>(submissionUrl.value, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+  }
+
+  return {
+    settingsUrl,
+    submissionUrl,
+    fetchSettings,
+    submitMemberForm,
+  };
 }
