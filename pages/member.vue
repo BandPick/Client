@@ -241,9 +241,9 @@ type Pick = {
   sessions: string[];
 };
 
-const MIN_FILLED_PICKS = 6;
-const INITIAL_PICK_ROWS = 6;
-const PICK_LABELS = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
+const MIN_FILLED_PICKS = 5;
+const INITIAL_PICK_ROWS = 5;
+const PICK_LABELS = ["1st", "2nd", "3rd", "4th", "5th"];
 
 const days = ["월", "화", "수", "목", "금"];
 const songs = ref<MemberSetlistSong[]>([]);
