@@ -153,7 +153,7 @@ const showSecret = ref(false);
 const role = ref<Role>("member");
 const errorMessage = ref("");
 const submitting = ref(false);
-const { login } = useAuthApi();
+const { login, saveAuthUser } = useAuthApi();
 const config = useRuntimeConfig();
 
 function isLoginNetworkError(error: unknown) {
@@ -217,7 +217,7 @@ async function handleSubmit() {
 
     const apiBase = String(config.public.apiBase);
     if (isLoginNetworkError(error)) {
-      errorMessage.value = `백엔드 서버에 연결할 수 없습니다. Spring Boot가 실행 중인지 확인해 주세요. (요청 주소: ${apiBase}/auth/login)`;
+      errorMessage.value = `백엔드 서버에 연결할 수 없습니다. Spring Boot가 실행 중인지 확인해 주세요. (요청 주소: ${apiBase}/api/v1/auth/login)`;
       return;
     }
 
