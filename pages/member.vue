@@ -225,13 +225,6 @@
           }}
         </button>
       </div>
-      <p v-if="saveMessage"
-        class="mt-3 rounded-lg border px-3 py-2 text-sm"
-        :class="saveError
-          ? 'border-rose-200 bg-rose-50 text-rose-700'
-          : 'border-emerald-200 bg-emerald-50 text-emerald-800'">
-        {{ saveMessage }}
-      </p>
     </section>
   </div>
 </template>
@@ -248,9 +241,9 @@ type Pick = {
   sessions: string[];
 };
 
-const MIN_FILLED_PICKS = 6;
-const INITIAL_PICK_ROWS = 6;
-const PICK_LABELS = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
+const MIN_FILLED_PICKS = 5;
+const INITIAL_PICK_ROWS = 5;
+const PICK_LABELS = ["1st", "2nd", "3rd", "4th", "5th"];
 
 const days = ["월", "화", "수", "목", "금"];
 const songs = ref<MemberSetlistSong[]>([]);
@@ -521,79 +514,6 @@ function finishDrag() {
 
 function resetSlots() {
   selectedSlots.value = new Set();
-}
-
-function validateSaveForm(): string {
-  if (!authUser.value) {
-    return "로그인 정보가 없습니다. 로그인 화면에서 다시 로그인해 주세요.";
-  }
-
-  const picks = buildMemberFormPicks(form.picks);
-  if (!picks.length) {
-    return "희망 곡과 세션을 최소 1개 이상 선택해 주세요.";
-  }
-
-  const hasPickWithoutSession = form.picks.some(
-    (pick) => pick.songId && !pick.sessions.length,
-  );
-  if (hasPickWithoutSession) {
-    return "곡을 선택한 경우 희망 세션도 함께 선택해 주세요.";
-  }
-
-  const availabilities = buildMemberFormAvailabilities(
-    selectedSlots.value,
-    timeSlots.value,
-    getScheduleWeekStart(deadlineAt),
-  );
-  if (!availabilities.length) {
-    return "합주 가능 시간대를 최소 1개 이상 선택해 주세요.";
-  }
-
-  return "";
-}
-
-async function handleSave() {
-  saveMessage.value = "";
-  saveError.value = false;
-
-  const validationError = validateSaveForm();
-  if (validationError) {
-    saveMessage.value = validationError;
-    saveError.value = true;
-    return;
-  }
-
-  const user = authUser.value!;
-  const picks = buildMemberFormPicks(form.picks);
-  const availabilities = buildMemberFormAvailabilities(
-    selectedSlots.value,
-    timeSlots.value,
-    getScheduleWeekStart(deadlineAt),
-  );
-
-  saving.value = true;
-  try {
-    const response = await saveMemberForm(user.id, {
-      userId: user.id,
-      picks,
-      availabilities,
-    });
-    saveMessage.value = response.message || "저장이 완료되었습니다.";
-    saveError.value = false;
-  } catch (error: unknown) {
-    saveError.value = true;
-    if (error && typeof error === "object" && "data" in error) {
-      const data = (error as { data?: unknown }).data;
-      if (typeof data === "string" && data.trim()) {
-        saveMessage.value = data;
-        return;
-      }
-    }
-    saveMessage.value =
-      "저장에 실패했습니다. 입력값과 서버 연결 상태를 확인해 주세요.";
-  } finally {
-    saving.value = false;
-  }
 }
 
 onMounted(async () => {

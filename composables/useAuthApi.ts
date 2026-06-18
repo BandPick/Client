@@ -20,13 +20,13 @@ const AUTH_USER_STORAGE_KEY = "bandpick-auth-user-v1";
 export function useAuthApi() {
   const config = useRuntimeConfig();
 
-  const authBaseUrl = computed(() => {
+  const loginUrl = computed(() => {
     const host = String(config.public.apiBase).replace(/\/$/, "");
-    return `${host}/auth`;
+    return `${host}/api/v1/auth/login`;
   });
 
   async function login(payload: LoginRequest) {
-    return await $fetch<LoginResponse>(`${authBaseUrl.value}/login`, {
+    return await $fetch<LoginResponse>(loginUrl.value, {
       method: "POST",
       body: payload,
     });

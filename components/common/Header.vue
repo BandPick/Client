@@ -15,3 +15,15 @@
     </div>
   </header>
 </template>
+
+<script setup lang="ts">
+const route = useRoute();
+
+function linkClass(section: string) {
+  const isActive =
+    section === "admin" ? route.path.startsWith("/admin") : route.path === "/";
+  return isActive
+    ? "rounded-lg px-3 py-2 text-sm font-semibold bg-white text-blue-600 shadow-sm"
+    : "rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700";
+}
+</script>
