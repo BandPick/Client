@@ -105,7 +105,9 @@ async function saveDeadline() {
     window.alert("신청곡 마감 일시가 정상적으로 저장되었습니다.");
   } catch (error) {
     console.error("settings PUT failed (마감)", error);
-    window.alert("신청곡 마감 일시 저장에 실패했습니다.");
+    window.alert(
+      "서버 저장은 실패했지만, 이 브라우저 localStorage에는 마감 일시가 저장되었습니다.",
+    );
   }
 }
 
@@ -128,7 +130,9 @@ async function saveSettings() {
     window.alert("최소 곡 수 설정이 정상적으로 저장되었습니다.");
   } catch (error) {
     console.error("settings PUT failed (최소 곡 수)", error);
-    window.alert("최소 곡 수 설정 저장에 실패했습니다.");
+    window.alert(
+      "서버 저장은 실패했지만, 이 브라우저 localStorage에는 최소 곡 수가 저장되었습니다.",
+    );
   }
 }
 </script>

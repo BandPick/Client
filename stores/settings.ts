@@ -2,8 +2,8 @@ import { defineStore } from "pinia";
 
 export const useSettingsStore = defineStore("settings", {
  state: () => ({
-  minVocal: 1,
-  minSession: 1,
+  minVocal: 6,
+  minSession: 6,
   deadline: "",
  }),
 
@@ -49,8 +49,8 @@ export const useSettingsStore = defineStore("settings", {
 
    try {
     const parsed = JSON.parse(data);
-    this.minVocal = parsed.minVocal ?? 1;
-    this.minSession = parsed.minSession ?? 1;
+    this.minVocal = parsed.minVocal ?? 6;
+    this.minSession = parsed.minSession ?? 6;
     this.deadline = parsed.deadline ?? "";
    } catch {
     // ignore
