@@ -13,10 +13,6 @@
               <path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16" />
             </svg>
           </button>
-          <NuxtLink to="/" class="text-sm font-medium text-slate-500 hover:text-slate-800">
-            ← 홈
-          </NuxtLink>
-          <span class="hidden text-slate-300 sm:inline">|</span>
           <h1 class="text-lg font-bold text-indigo-700">기획자</h1>
         </div>
       </div>
