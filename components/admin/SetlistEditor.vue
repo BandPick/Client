@@ -225,7 +225,24 @@ const setlistApiUrl = computed(() => {
   return `${host}/api/v1/${path}`;
 });
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const rows = await $fetch<
+      {
+        id: number;
+        title: string;
+        artist: string;
+        positions?: string[];
+        sessions?: string[];
+      }[]
+    >(setlistApiUrl.value, { method: "GET" });
+    if (Array.isArray(rows) && rows.length > 0) {
+      store.replaceFromApi(rows);
+      return;
+    }
+  } catch {
+    // API 실패 시 로컬 캐시 사용
+  }
   store.hydrate();
 });
 
@@ -353,16 +370,28 @@ async function saveSetlistToDb() {
   isSavingToDb.value = true;
   saveMessage.value = "";
   try {
-    await $fetch(setlistApiUrl.value, {
+    const saved = await $fetch<
+      {
+        id: number;
+        title: string;
+        artist: string;
+        positions?: string[];
+        sessions?: string[];
+      }[]
+    >(setlistApiUrl.value, {
       method: "POST",
       body: {
         items: store.items.map((item) => ({
+          ...(item.serverId != null ? { id: item.serverId } : {}),
           title: item.title,
           artist: item.artist,
           sessions: item.sessions ?? [],
         })),
       },
     });
+    if (Array.isArray(saved)) {
+      store.syncServerIdsFromApi(saved);
+    }
     saveMessageType.value = "success";
     saveMessage.value = "공연 셋리스트가 DB에 저장되었습니다.";
   } catch {
