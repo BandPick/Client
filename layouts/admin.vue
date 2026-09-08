@@ -9,6 +9,11 @@
           <span class="text-slate-300">|</span>
           <h1 class="text-lg font-bold text-indigo-700">기획자</h1>
         </div>
+        <button type="button"
+          class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          @click="handleLogout">
+          로그아웃
+        </button>
       </div>
     </header>
 
@@ -34,6 +39,12 @@
 
 <script setup lang="ts">
 const route = useRoute();
+const { clearAuthSession } = useAuthApi();
+
+async function handleLogout() {
+  clearAuthSession();
+  await navigateTo("/");
+}
 
 const nav = [
   { to: "/admin", label: "제출 현황" },
