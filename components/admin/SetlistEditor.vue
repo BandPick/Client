@@ -385,6 +385,7 @@ async function saveSetlistToDb() {
           ...(item.serverId != null ? { id: item.serverId } : {}),
           title: item.title,
           artist: item.artist,
+          positions: item.sessions ?? [],
           sessions: item.sessions ?? [],
         })),
       },
