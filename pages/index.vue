@@ -105,10 +105,6 @@
                 기획자
               </button>
             </div>
-            <NuxtLink v-if="role === 'admin'" to="/band/create"
-              class="mt-3 flex w-full items-center justify-center text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline">
-              새로운 밴드 그룹 생성
-            </NuxtLink>
           </fieldset>
         </div>
 
