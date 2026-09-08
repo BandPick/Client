@@ -1,4 +1,5 @@
 import type { SettingsResponse } from "~/types/settings";
+import { readLocalMemberSettings } from "~/utils/localMemberSettings";
 
 export type MemberPickRequest = {
   priority: number;
@@ -45,6 +46,30 @@ export function useMemberFormApi() {
     });
   }
 
+  /** API 실패 시 관리자가 localStorage에 저장한 설정으로 폴백 */
+  async function loadMemberSettings(): Promise<SettingsResponse | null> {
+    try {
+      return await fetchSettings();
+    } catch {
+      const local = readLocalMemberSettings();
+      if (!local) return null;
+
+      if (import.meta.dev) {
+        console.warn(
+          "[BandPick] settings API 실패 — localStorage(관리자 설정) 값을 사용합니다.",
+        );
+      }
+
+      return {
+        id: 0,
+        updateTime: "",
+        deadline: local.deadline,
+        minVocalSongs: local.minVocalSongs,
+        minSessionSongs: local.minSessionSongs,
+      };
+    }
+  }
+
   async function submitMemberForm(body: MemberSubmissionRequest) {
     return await $fetch<MemberSubmissionResponse>(submissionUrl.value, {
       method: "POST",
@@ -57,6 +82,7 @@ export function useMemberFormApi() {
     settingsUrl,
     submissionUrl,
     fetchSettings,
+    loadMemberSettings,
     submitMemberForm,
   };
 }

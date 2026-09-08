@@ -3,30 +3,12 @@
     <section
       class="grid gap-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8 lg:grid-cols-2 lg:gap-10 lg:rounded-3xl lg:p-12">
       <div
-        class="flex flex-col justify-center rounded-2xl bg-gradient-to-br from-blue-50 via-white to-slate-100 p-5 sm:p-8">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">BandPick</p>
-        <h1 class="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
-          밴드 공연 참여를
-          <br class="hidden sm:block">
-          더 빠르게 시작하세요.
-        </h1>
-        <p class="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">
-          역할에 맞는 로그인 정보를 입력하고, 부원/기획자 화면으로 바로 이동합니다.
-        </p>
-        <ul class="mt-6 space-y-2 text-sm text-slate-600">
-          <li class="flex items-center gap-2">
-            <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            부원: 이름 + 고유코드 로그인
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            기획자: 밴드명 + 비밀번호 로그인
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            모바일에서도 입력이 쉬운 반응형 UI
-          </li>
-        </ul>
+        class="hidden flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 via-white to-slate-100 p-5 sm:p-8 lg:flex">
+        <img
+          src="/images/arpeggio-logo.png"
+          alt="ARPEGGIO"
+          class="w-full max-w-xs rounded-full object-contain"
+        >
       </div>
 
       <form class="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 sm:p-8"
@@ -123,10 +105,6 @@
                 기획자
               </button>
             </div>
-            <NuxtLink v-if="role === 'admin'" to="/band/create"
-              class="mt-3 flex w-full items-center justify-center text-sm font-medium text-blue-600 transition hover:text-blue-700 hover:underline">
-              새로운 밴드 그룹 생성
-            </NuxtLink>
           </fieldset>
 
           <fieldset v-if="role === 'member'">
