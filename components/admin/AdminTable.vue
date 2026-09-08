@@ -1,12 +1,18 @@
 <template>
   <div class="overflow-x-auto rounded-xl border border-slate-200">
-    <table class="w-full table-fixed divide-y divide-slate-200 text-center text-sm">
+    <table class="min-w-[920px] w-full table-fixed divide-y divide-slate-200 text-center text-sm">
+      <colgroup>
+        <col class="w-20" />
+        <col span="5" class="w-32" />
+        <col class="w-36" />
+      </colgroup>
       <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
         <tr>
           <th
-            v-for="col in columns"
+            v-for="(col, ci) in columns"
             :key="col"
-            class="whitespace-nowrap px-2 py-3 border-r border-slate-200 last:border-r-0"
+            class="whitespace-nowrap border-r border-slate-200 px-2 py-3 last:border-r-0"
+            :class="ci === 0 ? 'sticky left-0 z-10 bg-slate-50' : ''"
           >
             {{ col }}
           </th>
@@ -29,7 +35,8 @@
           <td
             v-for="(cell, ci) in row"
             :key="ci"
-            class="whitespace-nowrap px-5 py-3 text-slate-800 border-r border-slate-100 last:border-r-0"
+            class="whitespace-nowrap border-r border-slate-100 px-5 py-3 text-slate-800 last:border-r-0"
+            :class="ci === 0 ? 'sticky left-0 z-[1] bg-white' : ''"
           >
             {{ cell }}
           </td>
