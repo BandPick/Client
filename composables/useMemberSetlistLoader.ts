@@ -33,7 +33,13 @@ function normalizeSessionStrings(raw: unknown): string[] {
     .map((s) => s.trim());
 }
 
-type LocalSetlistRow = { title: string; artist: string; sessions: string[] };
+type LocalSetlistRow = {
+  id: string;
+  serverId?: number;
+  title: string;
+  artist: string;
+  sessions: string[];
+};
 
 function readLocalSetlistRows(): LocalSetlistRow[] {
   if (!import.meta.client) return [];
@@ -44,7 +50,10 @@ function readLocalSetlistRows(): LocalSetlistRow[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((row): row is Record<string, unknown> => row != null && typeof row === "object")
-      .map((row) => ({
+      .map((row, index) => ({
+        id: String(row.id ?? `local-${index + 1}`),
+        serverId:
+          typeof row.serverId === "number" ? row.serverId : undefined,
         title: String(row.title ?? "").trim(),
         artist: String(row.artist ?? "").trim(),
         sessions: normalizeSessionStrings(row.sessions),
@@ -55,6 +64,14 @@ function readLocalSetlistRows(): LocalSetlistRow[] {
   }
 }
 
+function mapLocalRowsToMemberSongs(rows: LocalSetlistRow[]): MemberSetlistSong[] {
+  return rows.map((row, index) => ({
+    id: String(row.serverId ?? index + 1),
+    displayTitle: `${row.title} - ${row.artist}`,
+    sessions: [...row.sessions],
+  }));
+}
+
 export function useMemberSetlistLoader() {
   const config = useRuntimeConfig();
 
@@ -63,33 +80,55 @@ export function useMemberSetlistLoader() {
   });
 
   async function loadSongsForMemberForm(): Promise<MemberSetlistSong[]> {
-    const rows = await $fetch<SetlistApiItem[]>(setlistsUrl.value);
-    if (!Array.isArray(rows)) return [];
-
     const localRows = readLocalSetlistRows();
 
-    return rows.map((row) => {
-      const title = String(row.title ?? "").trim();
-      const artist = String(row.artist ?? "").trim();
-      let sessions = normalizeSessionStrings(
-        row.positions ?? row.sessions ?? [],
-      );
+    try {
+      const rows = await $fetch<SetlistApiItem[]>(setlistsUrl.value);
+      if (Array.isArray(rows) && rows.length > 0) {
+        return rows.map((row) => {
+          const title = String(row.title ?? "").trim();
+          const artist = String(row.artist ?? "").trim();
+          let sessions = normalizeSessionStrings(
+            row.positions ?? row.sessions ?? [],
+          );
 
-      if (!sessions.length && localRows.length) {
-        const hit = localRows.find(
-          (it) => it.title === title && it.artist === artist,
-        );
-        if (hit?.sessions.length) {
-          sessions = [...hit.sessions];
-        }
+          if (!sessions.length) {
+            if (import.meta.dev) {
+              console.warn(
+                `[BandPick] 셋리스트 "${title} - ${artist}"에 API 세션이 없습니다. 관리자 설정에서 셋리스트를 다시 저장해 주세요.`,
+              );
+            }
+            if (localRows.length) {
+              const hit = localRows.find(
+                (it) => it.title === title && it.artist === artist,
+              );
+              if (hit?.sessions.length) {
+                sessions = [...hit.sessions];
+              }
+            }
+          }
+
+          return {
+            id: String(row.id),
+            displayTitle: `${title} - ${artist}`,
+            sessions,
+          };
+        });
       }
+    } catch {
+      // API 미연동 시 localStorage 폴백
+    }
 
-      return {
-        id: String(row.id),
-        displayTitle: `${title} - ${artist}`,
-        sessions,
-      };
-    });
+    if (localRows.length) {
+      if (import.meta.dev) {
+        console.warn(
+          "[BandPick] 셋리스트 API 없음/비어 있음 — localStorage(관리자 셋리스트) 값을 사용합니다.",
+        );
+      }
+      return mapLocalRowsToMemberSongs(localRows);
+    }
+
+    return [];
   }
 
   return { setlistsUrl, loadSongsForMemberForm };

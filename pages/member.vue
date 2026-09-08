@@ -10,6 +10,10 @@
           <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
         </div>
       </div>
+      <div class="mt-2 text-xs font-medium text-slate-500 sm:hidden">
+        <p>신청 마감 시간 {{ deadlineDisplay }}</p>
+        <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
+      </div>
 
       <p
         v-if="saveFeedback"
@@ -33,9 +37,9 @@
         <div class="min-w-0 space-y-5 sm:space-y-6">
           <div>
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
-              희망 곡 및 세션 (최소 {{ MIN_FILLED_PICKS }}지망 · 추가 가능)
-              <span class="ml-2 font-normal text-slate-500">
-                ({{ filledPickCount }} / {{ MIN_FILLED_PICKS }} 지망 작성)
+              희망 곡 및 세션
+              <span class="font-normal text-slate-500">
+                (최소 6지망 · 추가 가능)
               </span>
             </p>
             <p
@@ -72,7 +76,7 @@
                       }}
                     </option>
                     <option
-                      v-for="song in songs"
+                      v-for="song in getAvailableSongsForPick(index)"
                       :key="song.id"
                       :value="song.id"
                     >
@@ -80,7 +84,7 @@
                     </option>
                   </select>
                   <button
-                    v-if="index >= MIN_FILLED_PICKS"
+                    v-if="index >= INITIAL_PICK_ROWS"
                     type="button"
                     class="shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
                     @click="removePick(index)"
@@ -241,9 +245,10 @@ type Pick = {
   sessions: string[];
 };
 
-const MIN_FILLED_PICKS = 5;
-const INITIAL_PICK_ROWS = 5;
-const PICK_LABELS = ["1st", "2nd", "3rd", "4th", "5th"];
+const REQUIRED_MIN_ROLES = 6;
+const INITIAL_PICK_ROWS = 3;
+const LOCAL_SUBMISSION_KEY = "bandpick-member-submission-v1";
+const PICK_LABELS = ["1st", "2nd", "3rd"];
 
 const days = ["월", "화", "수", "목", "금"];
 const songs = ref<MemberSetlistSong[]>([]);
@@ -252,7 +257,7 @@ const setlistError = ref("");
 const saveFeedback = ref("");
 const saveFeedbackType = ref<"error" | "success">("error");
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
-const { fetchSettings, submitMemberForm } = useMemberFormApi();
+const { loadMemberSettings, submitMemberForm } = useMemberFormApi();
 const settingsLoading = ref(true);
 const settingsError = ref("");
 const saving = ref(false);
@@ -283,11 +288,12 @@ const timeSlots = computed(() => {
   return slots;
 });
 
-const filledPickCount = computed(() => {
-  return form.picks.filter(
-    (pick) => pick.songId && pick.sessions.length > 0,
-  ).length;
-});
+const filledRoleCount = computed(() =>
+  form.picks.reduce((sum, pick) => {
+    if (!pick.songId) return sum;
+    return sum + pick.sessions.length;
+  }, 0),
+);
 
 const deadlineDisplay = computed(() => {
   if (!deadlineAt.value) return "미설정";
@@ -331,6 +337,20 @@ function getSessionsForSong(songId: string): string[] {
 
 function getDisplaySessionsForSong(songId: string): string[] {
   return getSessionsForSong(songId);
+}
+
+function getAvailableSongsForPick(pickIndex: number): MemberSetlistSong[] {
+  const usedElsewhere = new Set(
+    form.picks
+      .filter((_, i) => i !== pickIndex)
+      .map((pick) => pick.songId)
+      .filter(Boolean),
+  );
+  const currentSongId = form.picks[pickIndex]?.songId ?? "";
+
+  return songs.value.filter(
+    (song) => !usedElsewhere.has(song.id) || song.id === currentSongId,
+  );
 }
 
 function getSessionLabel(_songId: string, session: string) {
@@ -405,16 +425,37 @@ function addPick() {
 }
 
 function removePick(index: number) {
-  if (index < MIN_FILLED_PICKS) return;
+  if (index < INITIAL_PICK_ROWS) return;
   form.picks.splice(index, 1);
   pruneDuplicatePairs();
 }
 
 function validatePicksForSave(): string {
-  if (filledPickCount.value < MIN_FILLED_PICKS) {
-    return `곡과 세션을 최소 ${MIN_FILLED_PICKS}지망 이상 채워 주세요. (현재 ${filledPickCount.value}지망)`;
+  if (filledRoleCount.value < REQUIRED_MIN_ROLES) {
+    return `희망 세션을 최소 ${REQUIRED_MIN_ROLES}개 이상 선택해 주세요. (현재 ${filledRoleCount.value}개)`;
   }
   return "";
+}
+
+function saveSubmissionDraft(body: unknown) {
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(LOCAL_SUBMISSION_KEY, JSON.stringify(body));
+  } catch {
+    // ignore
+  }
+}
+
+function isSubmissionNetworkError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { message?: string; cause?: { code?: string } };
+  const message = String(err.message ?? "");
+  return (
+    err.cause?.code === "ECONNREFUSED" ||
+    message.includes("Failed to fetch") ||
+    message.includes("NetworkError") ||
+    message.includes("fetch failed")
+  );
 }
 
 async function handleSave() {
@@ -463,7 +504,14 @@ async function handleSave() {
       : response.success
         ? "신청 정보가 저장되었습니다."
         : "신청 저장에 실패했습니다.";
-  } catch {
+  } catch (error) {
+    if (import.meta.dev && isSubmissionNetworkError(error)) {
+      saveSubmissionDraft(requestBody);
+      saveFeedbackType.value = "success";
+      saveFeedback.value =
+        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.";
+      return;
+    }
     saveFeedbackType.value = "error";
     saveFeedback.value =
       "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.";
@@ -520,14 +568,20 @@ onMounted(async () => {
   settingsLoading.value = true;
   settingsError.value = "";
   try {
-    const settings = await fetchSettings();
-    const parsed = new Date(settings.deadline);
-    if (Number.isNaN(parsed.getTime())) {
+    const settings = await loadMemberSettings();
+    if (!settings) {
       settingsError.value =
-        "마감 시간 형식을 해석할 수 없습니다. 관리자 설정을 확인해 주세요.";
+        "마감 설정을 불러오지 못했습니다. 관리자 설정(/admin/settings)에서 마감 일시를 저장해 주세요.";
       deadlineAt.value = null;
     } else {
-      deadlineAt.value = parsed;
+      const parsed = new Date(settings.deadline);
+      if (Number.isNaN(parsed.getTime())) {
+        settingsError.value =
+          "마감 시간 형식을 해석할 수 없습니다. 관리자 설정을 확인해 주세요.";
+        deadlineAt.value = null;
+      } else {
+        deadlineAt.value = parsed;
+      }
     }
   } catch {
     settingsError.value =
@@ -541,6 +595,10 @@ onMounted(async () => {
   setlistError.value = "";
   try {
     songs.value = await loadSongsForMemberForm();
+    if (!songs.value.length) {
+      setlistError.value =
+        "등록된 공연 곡이 없습니다. 관리자 설정(/admin/settings)에서 셋리스트를 추가해 주세요.";
+    }
   } catch {
     setlistError.value =
       "공연 셋리스트를 불러오지 못했습니다. 네트워크와 서버 주소(NUXT_PUBLIC_API_BASE)를 확인해 주세요.";
