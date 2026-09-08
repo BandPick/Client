@@ -3,10 +3,6 @@
     <header class="sticky top-0 z-40 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <NuxtLink to="/" class="text-sm font-medium text-slate-500 hover:text-slate-800">
-            ← 홈
-          </NuxtLink>
-          <span class="text-slate-300">|</span>
           <h1 class="text-lg font-bold text-indigo-700">기획자</h1>
         </div>
       </div>

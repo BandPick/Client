@@ -7,7 +7,11 @@
         🎸 BandPick
       </NuxtLink>
 
-      <nav class="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="주요 메뉴">
+      <nav
+        v-if="route.path !== '/'"
+        class="flex gap-1 rounded-lg bg-slate-100 p-1"
+        aria-label="주요 메뉴"
+      >
         <NuxtLink to="/admin" :class="linkClass('admin')">
           기획자
         </NuxtLink>
