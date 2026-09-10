@@ -52,9 +52,19 @@
 
     <section v-if="activeTab === 'matrix'" class="mt-8 rounded-xl border border-slate-200 bg-white">
       <div class="border-b border-slate-200 px-4 py-3">
-        <h2 class="text-lg font-semibold">
-          데이터 불러오기 결과
-        </h2>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-lg font-semibold">데이터 불러오기</h2>
+          <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="h-3 w-3 rounded-sm bg-slate-200/80 ring-1 ring-slate-300" />
+              불필요
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="h-3 w-3 rounded-sm bg-rose-50 ring-1 ring-rose-200" />
+              미지원
+            </span>
+          </div>
+        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -81,16 +91,17 @@
               </th>
 
               <td v-for="session in SESSIONS" :key="`${song}-${session}`"
-                class="border-b border-r border-slate-200 px-2 py-2 text-slate-700">
-                <div v-if="songMatrix[song]?.[session]?.length" class="space-y-0.5 text-center">
-                  <p v-for="entry in songMatrix[song][session]" :key="entry">
-                    {{ entry }}
-                  </p>
-                </div>
-
-                <span v-else class="flex h-full items-center justify-center text-slate-300">
-                  -
-                </span>
+                class="border-b border-r border-slate-200 px-2 py-2" :class="matrixCellClass(song, session)">
+                <template v-if="isSessionRequired(song, session)">
+                  <div v-if="songMatrix[song][session].length" class="space-y-0.5 text-center text-slate-700">
+                    <p v-for="entry in songMatrix[song][session]" :key="entry">
+                      {{ entry }}
+                    </p>
+                  </div>
+                  <span v-else class="flex h-full items-center justify-center text-xs font-semibold text-rose-600">
+                    미지원
+                  </span>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -266,6 +277,7 @@ const POSITION_TO_SESSION: Record<string, string> = {
 const config = useRuntimeConfig();
 
 const memberData = ref<MemberPick[]>([]);
+const requiredSessionsBySong = ref<Record<string, string[]>>({});
 const setlistTitles = ref<string[]>([]);
 
 const activeTab = ref<
@@ -305,6 +317,31 @@ const algorithmRunUrl = computed(() => {
   return `${host}/algorithm/run`;
 });
 
+function normalizeSessionLabel(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  if (value === "기타" || value.startsWith("기타(") || value.startsWith("CHORUS")) {
+    return "기타";
+  }
+  return value;
+}
+function isSessionRequired(song: string, session: string): boolean {
+  const required = requiredSessionsBySong.value[song];
+  // 셋리스트 정보가 없으면 빈 칸을 '미지원'으로 강조 (회색 막지 않음)
+  if (!required || required.length === 0) return true;
+  return required.includes(session);
+}
+function matrixCellClass(song: string, session: string): string {
+  if (!isSessionRequired(song, session)) {
+    return "bg-slate-200/80";
+  }
+  const applicants = songMatrix.value[song]?.[session] ?? [];
+  if (!applicants.length) {
+    return "bg-rose-50";
+  }
+  return "bg-white";
+}
+
 async function handleLoadData() {
   isLoadingData.value = true;
   loadError.value = "";
@@ -330,6 +367,15 @@ async function handleLoadData() {
       name: form.name,
       picks: form.picks ?? [],
     }));
+
+    const requiredMap: Record<string, string[]> = {};
+    for (const item of setlists) {
+      const positions = (item.positions ?? [])
+        .map(normalizeSessionLabel)
+        .filter(Boolean);
+      requiredMap[item.title] = [...new Set(positions)];
+    }
+    requiredSessionsBySong.value = requiredMap;
 
     const titlesFromSetlists = setlists.map(
       (item) => item.title,
@@ -381,17 +427,11 @@ const songMatrix = computed<
 
   memberData.value.forEach((member) => {
     member.picks.forEach((pick, index) => {
-      const [songName, session] =
-        pick.split(" / ");
-
-      if (
-        songName &&
-        session &&
-        matrix[songName]?.[session]
-      ) {
-        matrix[songName][session].push(
-          `${index + 1}. ${member.name}`,
-        );
+      const [songNameRaw, sessionRaw] = pick.split(" / ");
+      const songName = songNameRaw?.trim() ?? "";
+      const session = normalizeSessionLabel(sessionRaw ?? "");
+      if (matrix[songName]?.[session]) {
+        matrix[songName][session].push(`${index + 1}. ${member.name}`);
       }
     });
   });
