@@ -128,7 +128,10 @@
               {{ result.status }}
             </span>
           </div>
-
+          <p v-if="result.status !== '완료' && result.reason"
+            class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+            제외 사유: {{ result.reason }}
+          </p>
           <div class="mt-3 overflow-hidden rounded-md border border-slate-200 bg-white">
             <table class="w-full border-collapse text-sm">
               <tbody>
@@ -200,6 +203,7 @@ type MatchingResult = {
   song: string;
   artist: string;
   status: string;
+  reason: string;
   members: MatchingMember[];
 };
 
@@ -207,6 +211,7 @@ type TeamMatchApiResponse = {
   song: string;
   artist?: string;
   status?: string;
+  reason?: string;
   members?: MatchingMember[];
 };
 
@@ -221,15 +226,25 @@ type AssignmentStateJson = {
     string,
     Record<string, AssignmentMemberJson>
   >;
-
   confirmed?: Record<
     string,
     Record<string, AssignmentMemberJson>
   >;
-
+  candidates_AL?: Record<
+    string,
+    Record<string, unknown>
+  >;
+  candidates?: Record<
+    string,
+    Record<string, unknown>
+  >;
   excluded_AL?: string[];
   excluded?: string[];
+  songScore_AL?: Record<string, number>;
+  songScore?: Record<string, number>;
 };
+
+const MIN_COMMON_DAY_LIMIT = 1;
 
 const POSITION_TO_SESSION: Record<string, string> = {
   VOCAL1: "V",
@@ -447,6 +462,26 @@ function memberNameFromJson(
   );
 }
 
+function buildExcludeReason(
+  score: number | undefined,
+  confirmedPositions: string[],
+  candidatePositions: string[],
+): string {
+  const parts: string[] = [];
+  if (typeof score === "number") {
+    const requiredDays = MIN_COMMON_DAY_LIMIT + 1;
+    parts.push(`공통 가능일 ${score}일 (필요: ${requiredDays}일 이상)`);
+  }
+  const confirmedSet = new Set(confirmedPositions);
+  const missing = candidatePositions
+    .filter((position) => !confirmedSet.has(position))
+    .map((position) => POSITION_TO_SESSION[position] ?? position);
+  if (missing.length) {
+    parts.push(`미배정 세션: ${missing.join(", ")}`);
+  }
+  return parts.length ? parts.join(" · ") : "제외 사유를 확인할 수 없습니다.";
+}
+
 function parseAssignmentState(
   state: AssignmentStateJson,
 ): MatchingResult[] {
@@ -454,7 +489,8 @@ function parseAssignmentState(
     state.confirmed_AL ??
     state.confirmed ??
     {};
-
+  const candidates = state.candidates_AL ?? state.candidates ?? {};
+  const songScore = state.songScore_AL ?? state.songScore ?? {};
   const excluded = new Set(
     state.excluded_AL ??
     state.excluded ??
@@ -497,12 +533,20 @@ function parseAssignmentState(
       artist,
     } = splitSongKey(songKey);
 
+    const isExcluded = excluded.has(songKey);
+    const reason = isExcluded
+      ? buildExcludeReason(
+        songScore[songKey],
+        Object.keys(positions ?? {}),
+        Object.keys(candidates[songKey] ?? {}),
+      )
+      : "";
+
     results.push({
       song,
       artist,
-      status: excluded.has(songKey)
-        ? "제외"
-        : "완료",
+      status: isExcluded ? "제외" : "완료",
+      reason,
       members:
         sortMembersBySession(members),
     });
@@ -520,6 +564,7 @@ function normalizeMatchResponse(
         artist: item.artist ?? "",
         status:
           item.status || "완료",
+        reason: item.reason ?? "",
         members:
           sortMembersBySession(
             item.members ?? [],
