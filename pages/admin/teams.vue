@@ -190,7 +190,7 @@ const SESSIONS = [
 type MemberFormMemberResponse = {
   userId: number;
   name: string;
-  picks: string[];
+  picks: MemberPickEntry[];
 };
 
 type SetlistItem = {
@@ -200,9 +200,15 @@ type SetlistItem = {
   positions: string[];
 };
 
+type MemberPickEntry = {
+  priority: number;
+  songTitle: string;
+  session: string;
+};
+
 type MemberPick = {
   name: string;
-  picks: string[];
+  picks: MemberPickEntry[];
 };
 
 type MatchingMember = {
@@ -365,7 +371,11 @@ async function handleLoadData() {
 
     memberData.value = forms.map((form) => ({
       name: form.name,
-      picks: form.picks ?? [],
+      picks: (form.picks ?? []).map((pick) => ({
+        priority: pick.priority,
+        songTitle: pick.songTitle,
+        session: pick.session,
+      })),
     }));
 
     const requiredMap: Record<string, string[]> = {};
@@ -377,18 +387,9 @@ async function handleLoadData() {
     }
     requiredSessionsBySong.value = requiredMap;
 
-    const titlesFromSetlists = setlists.map(
-      (item) => item.title,
-    );
-
-    const titlesFromForms = forms.flatMap(
-      (form) =>
-        (form.picks ?? [])
-          .map(
-            (pick) =>
-              pick.split(" / ")[0]?.trim() ?? "",
-          )
-          .filter(Boolean),
+    const titlesFromSetlists = setlists.map((item) => item.title);
+    const titlesFromForms = forms.flatMap((form) =>
+      (form.picks ?? []).map((pick) => pick.songTitle?.trim() ?? "").filter(Boolean),
     );
 
     setlistTitles.value = [
@@ -426,13 +427,21 @@ const songMatrix = computed<
 
 
   memberData.value.forEach((member) => {
-    member.picks.forEach((pick, index) => {
-      const [songNameRaw, sessionRaw] = pick.split(" / ");
-      const songName = songNameRaw?.trim() ?? "";
-      const session = normalizeSessionLabel(sessionRaw ?? "");
+    member.picks.forEach((pick) => {
+      const songName = pick.songTitle?.trim() ?? "";
+      const session = normalizeSessionLabel(pick.session ?? "");
       if (matrix[songName]?.[session]) {
-        matrix[songName][session].push(`${index + 1}. ${member.name}`);
+        matrix[songName][session].push(`${pick.priority}. ${member.name}`);
       }
+    });
+  });
+  setlistTitles.value.forEach((song) => {
+    SESSIONS.forEach((session) => {
+      matrix[song][session].sort((a, b) => {
+        const priorityA = Number.parseInt(a.split(".")[0] ?? "999", 10);
+        const priorityB = Number.parseInt(b.split(".")[0] ?? "999", 10);
+        return priorityA - priorityB;
+      });
     });
   });
   return matrix;
