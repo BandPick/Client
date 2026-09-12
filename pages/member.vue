@@ -2,9 +2,25 @@
   <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
       <div class="flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          공연 참가 정보 입력
-        </h1>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            공연 참가 정보 입력
+          </h1>
+          <div class="mt-3 grid w-full max-w-[240px] grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            <button type="button" class="rounded-lg px-3 py-2 text-sm font-semibold transition" :class="formMode === 'song'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+              " @click="formMode = 'song'">
+              일반
+            </button>
+            <button type="button" class="rounded-lg px-3 py-2 text-sm font-semibold transition" :class="formMode === 'team'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+              " @click="formMode = 'team'">
+              팀제
+            </button>
+          </div>
+        </div>
         <div class="hidden text-right text-xs font-medium text-slate-500 sm:block">
           <p>신청 마감 시간 {{ deadlineDisplay }}</p>
           <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
@@ -15,57 +31,45 @@
         <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
       </div>
 
-      <p
-        v-if="saveFeedback"
-        class="mt-4 rounded-lg border px-3 py-2 text-sm"
-        :class="
-          saveFeedbackType === 'error'
-            ? 'border-rose-200 bg-rose-50 text-rose-600'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-        "
-      >
+      <p v-if="saveFeedback" class="mt-4 rounded-lg border px-3 py-2 text-sm" :class="saveFeedbackType === 'error'
+          ? 'border-rose-200 bg-rose-50 text-rose-600'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        ">
         {{ saveFeedback }}
       </p>
-      <p
-        v-if="settingsError"
-        class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-      >
+      <p v-if="settingsError"
+        class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
         {{ settingsError }}
       </p>
 
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="min-w-0 space-y-5 sm:space-y-6">
-          <div>
+          <MemberTeamFormFields
+            v-if="formMode === 'team'"
+            v-model:skills="teamSkills"
+            v-model:preferred-teammates="preferredTeammates"
+            v-model:max-teams="maxTeams"
+          />
+          <div v-else>
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
               희망 곡 및 세션
               <span class="font-normal text-slate-500">
                 (최소 6지망 · 추가 가능)
               </span>
             </p>
-            <p
-              v-if="setlistError"
-              class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-            >
+            <p v-if="setlistError"
+              class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {{ setlistError }}
             </p>
             <div class="space-y-4">
-              <div
-                v-for="(pick, index) in form.picks"
-                :key="`pick-${index}`"
-                class="py-1"
-              >
+              <div v-for="(pick, index) in form.picks" :key="`pick-${index}`" class="py-1">
                 <div class="grid grid-cols-[auto_1fr_auto] items-center gap-2">
-                  <span
-                    class="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600"
-                  >
+                  <span class="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
                     {{ pickLabel(index) }}
                   </span>
-                  <select
-                    v-model="pick.songId"
-                    :disabled="setlistLoading"
+                  <select v-model="pick.songId" :disabled="setlistLoading"
                     class="min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                    @change="onPickSongChange(index)"
-                  >
+                    @change="onPickSongChange(index)">
                     <option value="">
                       {{
                         setlistLoading
@@ -75,55 +79,34 @@
                             : "등록된 공연 곡이 없습니다 (관리자 설정에서 셋리스트를 저장해 주세요)"
                       }}
                     </option>
-                    <option
-                      v-for="song in getAvailableSongsForPick(index)"
-                      :key="song.id"
-                      :value="song.id"
-                    >
+                    <option v-for="song in getAvailableSongsForPick(index)" :key="song.id" :value="song.id">
                       {{ song.displayTitle }}
                     </option>
                   </select>
-                  <button
-                    v-if="index >= INITIAL_PICK_ROWS"
-                    type="button"
+                  <button v-if="index >= INITIAL_PICK_ROWS" type="button"
                     class="shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                    @click="removePick(index)"
-                  >
+                    @click="removePick(index)">
                     삭제
                   </button>
                 </div>
 
-                <div
-                  v-if="pick.songId"
-                  class="mt-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/90 px-3 py-3 pl-12 sm:pl-14"
-                >
+                <div v-if="pick.songId"
+                  class="mt-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/90 px-3 py-3 pl-12 sm:pl-14">
                   <p class="text-xs font-semibold text-slate-800">
                     희망 세션
                     <span class="font-normal text-slate-500">(복수 선택)</span>
                   </p>
 
-                  <div
-                    v-if="getDisplaySessionsForSong(pick.songId).length"
-                    class="flex flex-wrap gap-2"
-                  >
-                    <button
-                      v-for="session in getDisplaySessionsForSong(pick.songId)"
-                      :key="`${pick.songId}-${session}`"
-                      type="button"
-                      class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
-                      :class="
-                        pick.sessions.includes(session)
+                  <div v-if="getDisplaySessionsForSong(pick.songId).length" class="flex flex-wrap gap-2">
+                    <button v-for="session in getDisplaySessionsForSong(pick.songId)" :key="`${pick.songId}-${session}`"
+                      type="button" class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
+                      :class="pick.sessions.includes(session)
                           ? 'border-blue-500 bg-blue-100 text-blue-700'
                           : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'
-                      "
-                      :disabled="isSessionBlockedForPick(index, session)"
-                      :title="
-                        isSessionBlockedForPick(index, session)
+                        " :disabled="isSessionBlockedForPick(index, session)" :title="isSessionBlockedForPick(index, session)
                           ? '이미 다른 지망에서 선택한 곡·세션입니다.'
                           : ''
-                      "
-                      @click="toggleSession(index, session)"
-                    >
+                        " @click="toggleSession(index, session)">
                       {{ getSessionLabel(pick.songId, session) }}
                     </button>
                   </div>
@@ -135,11 +118,9 @@
               </div>
             </div>
 
-            <button
-              type="button"
+            <button type="button"
               class="mt-4 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
-              @click="addPick"
-            >
+              @click="addPick">
               + 지망 추가하기
             </button>
           </div>
@@ -150,52 +131,36 @@
             합주 가능 시간대 선택
           </p>
           <div class="w-full overflow-hidden rounded-2xl border border-slate-300">
-            <div
-              class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]"
-            >
+            <div class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]">
               <div
-                class="sticky left-0 z-10 border-b border-r border-slate-300 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500"
-              >
+                class="sticky left-0 z-10 border-b border-r border-slate-300 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-500">
                 시간
               </div>
-              <div
-                v-for="(day, dayIndex) in days"
-                :key="`head-${day}`"
+              <div v-for="(day, dayIndex) in days" :key="`head-${day}`"
                 class="border-b border-slate-300 bg-slate-50 px-2 py-2 text-center text-xs font-semibold text-slate-600"
-                :class="dayIndex === days.length - 1 ? '' : 'border-r'"
-              >
+                :class="dayIndex === days.length - 1 ? '' : 'border-r'">
                 {{ day }}
               </div>
 
               <template v-for="(time, timeIndex) in timeSlots" :key="`row-${time}`">
                 <div
                   class="sticky left-0 z-10 border-r border-slate-300 bg-white px-2 py-2 text-center text-xs font-medium text-slate-500"
-                  :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'"
-                >
+                  :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'">
                   {{ timeIndex % 2 === 0 ? time : "" }}
                 </div>
-                <button
-                  v-for="day in days"
-                  :key="`${day}-${time}`"
-                  type="button"
-                  class="box-border h-9 border-b border-r border-slate-300 transition-colors"
-                  :class="[
+                <button v-for="day in days" :key="`${day}-${time}`" type="button"
+                  class="box-border h-9 border-b border-r border-slate-300 transition-colors" :class="[
                     isSelectedSlot(day, time)
                       ? 'bg-blue-100 hover:bg-blue-200'
                       : 'bg-white hover:bg-slate-50',
-                  ]"
-                  @mousedown.prevent="startDrag(day, time)"
-                  @mouseenter="handleDragEnter(day, time)"
-                />
+                  ]" @mousedown.prevent="startDrag(day, time)" @mouseenter="handleDragEnter(day, time)" />
               </template>
             </div>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
-            <button
-              type="button"
+            <button type="button"
               class="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              @click="resetSlots"
-            >
+              @click="resetSlots">
               초기화
             </button>
           </div>
@@ -203,23 +168,16 @@
       </div>
 
       <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <NuxtLink
-          to="/"
-          class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
+        <NuxtLink to="/"
+          class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
           로그인 화면으로
         </NuxtLink>
-        <button
-          type="button"
+        <button type="button"
           class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
-          :disabled="saving || settingsLoading || isDeadlinePassed"
-          :class="
-            saving || settingsLoading || isDeadlinePassed
+          :disabled="saving || settingsLoading || isDeadlinePassed" :class="saving || settingsLoading || isDeadlinePassed
               ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
               : ''
-          "
-          @click="handleSave"
-        >
+            " @click="handleSave">
           {{
             saving
               ? "저장 중..."
@@ -239,7 +197,9 @@ import {
   useMemberSetlistLoader,
 } from "~/composables/useMemberSetlistLoader";
 import { useMemberFormApi } from "~/composables/useMemberFormApi";
+import { TEAM_POSITIONS, createEmptyTeamSkills, type TeamSkills } from "~/utils/teamForm";
 
+type FormMode = "song" | "team";
 type Pick = {
   songId: string;
   sessions: string[];
@@ -248,6 +208,8 @@ type Pick = {
 const REQUIRED_MIN_ROLES = 6;
 const INITIAL_PICK_ROWS = 3;
 const LOCAL_SUBMISSION_KEY = "bandpick-member-submission-v1";
+const LOCAL_TEAM_SUBMISSION_KEY = "bandpick-team-submission-v1";
+const LOCAL_FORM_MODE_KEY = "bandpick-member-form-mode-v1";
 const PICK_LABELS = ["1st", "2nd", "3rd"];
 
 const days = ["월", "화", "수", "목", "금"];
@@ -257,10 +219,15 @@ const setlistError = ref("");
 const saveFeedback = ref("");
 const saveFeedbackType = ref<"error" | "success">("error");
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
-const { loadMemberSettings, submitMemberForm } = useMemberFormApi();
+const { loadMemberSettings, submitMemberForm, submitTeamForm } = useMemberFormApi();
+const { loadAuthUser } = useAuthApi();
 const settingsLoading = ref(true);
 const settingsError = ref("");
 const saving = ref(false);
+const formMode = ref<FormMode>("song");
+const preferredTeammates = ref("");
+const maxTeams = ref(1);
+const teamSkills = ref<TeamSkills>(createEmptyTeamSkills());
 
 function createEmptyPick(): Pick {
   return { songId: "", sessions: [] };
@@ -437,10 +404,54 @@ function validatePicksForSave(): string {
   return "";
 }
 
+function selectedTeamPositions() {
+  return TEAM_POSITIONS.flatMap((position) => {
+    const level = teamSkills.value[position];
+    if (!level) return [];
+    return [{ position, level }];
+  });
+}
+
+function selectedTeamSchedules() {
+  return Array.from(selectedSlots.value)
+    .flatMap((key) => {
+      const separatorIndex = key.indexOf("-");
+      if (separatorIndex <= 0) return [];
+      const dayOfWeek = key.slice(0, separatorIndex);
+      const startTime = key.slice(separatorIndex + 1);
+      if (!dayOfWeek || !startTime) return [];
+      return [{ dayOfWeek, startTime }];
+    })
+    .sort((a, b) => {
+      const dayOrder = days.indexOf(a.dayOfWeek) - days.indexOf(b.dayOfWeek);
+      if (dayOrder !== 0) return dayOrder;
+      return a.startTime.localeCompare(b.startTime);
+    });
+}
+
+function validateTeamFormForSave(): string {
+  if (!selectedTeamPositions().length) {
+    return "가능한 포지션을 하나 이상 선택하고 숙련도를 지정해 주세요.";
+  }
+  if (maxTeams.value < 1 || maxTeams.value > 3) {
+    return "참여 가능 팀 수는 1팀부터 3팀까지 선택할 수 있습니다.";
+  }
+  return "";
+}
+
 function saveSubmissionDraft(body: unknown) {
   if (!import.meta.client) return;
   try {
     localStorage.setItem(LOCAL_SUBMISSION_KEY, JSON.stringify(body));
+  } catch {
+    // ignore
+  }
+}
+
+function saveTeamSubmissionDraft(body: unknown) {
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(LOCAL_TEAM_SUBMISSION_KEY, JSON.stringify(body));
   } catch {
     // ignore
   }
@@ -474,6 +485,10 @@ async function handleSave() {
   if (isDeadlinePassed.value) {
     saveFeedbackType.value = "error";
     saveFeedback.value = "신청 마감 시간이 지나 제출할 수 없습니다.";
+    return;
+  }
+  if (formMode.value === "team") {
+    await handleTeamSave();
     return;
   }
   const validationError = validatePicksForSave();
@@ -515,6 +530,67 @@ async function handleSave() {
     saveFeedbackType.value = "error";
     saveFeedback.value =
       "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.";
+  } finally {
+    saving.value = false;
+  }
+}
+
+function extractSaveErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) return data;
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
+
+async function handleTeamSave() {
+  const validationError = validateTeamFormForSave();
+  if (validationError) {
+    saveFeedbackType.value = "error";
+    saveFeedback.value = validationError;
+    return;
+  }
+
+  const requestBody = {
+    teammates: preferredTeammates.value.trim(),
+    maxTeams: maxTeams.value,
+    positions: selectedTeamPositions(),
+    schedules: selectedTeamSchedules(),
+  };
+
+  saving.value = true;
+  try {
+    const user = loadAuthUser();
+    if (!user) {
+      saveTeamSubmissionDraft(requestBody);
+      saveFeedbackType.value = import.meta.dev ? "success" : "error";
+      saveFeedback.value = import.meta.dev
+        ? "로그인 정보가 없어 입력 내용을 브라우저에 임시 저장했습니다."
+        : "로그인 정보가 없습니다. 다시 로그인해 주세요.";
+      return;
+    }
+
+    const response = await submitTeamForm(user.id, requestBody);
+    saveFeedbackType.value = "success";
+    saveFeedback.value = response.message || "팀제 신청이 저장되었습니다.";
+  } catch (error) {
+    if (import.meta.dev && isSubmissionNetworkError(error)) {
+      saveTeamSubmissionDraft(requestBody);
+      saveFeedbackType.value = "success";
+      saveFeedback.value =
+        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.";
+      return;
+    }
+    saveFeedbackType.value = "error";
+    saveFeedback.value = extractSaveErrorMessage(
+      error,
+      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.",
+    );
   } finally {
     saving.value = false;
   }
@@ -565,6 +641,17 @@ function resetSlots() {
 }
 
 onMounted(async () => {
+  if (import.meta.client) {
+    try {
+      const savedMode = localStorage.getItem(LOCAL_FORM_MODE_KEY);
+      if (savedMode === "song" || savedMode === "team") {
+        formMode.value = savedMode;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   settingsLoading.value = true;
   settingsError.value = "";
   try {
@@ -618,6 +705,16 @@ onBeforeUnmount(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
+watch(formMode, (mode) => {
+  saveFeedback.value = "";
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(LOCAL_FORM_MODE_KEY, mode);
+  } catch {
+    // ignore
+  }
+});
+
 watch(
   songs,
   () => {
@@ -627,6 +724,8 @@ watch(
 );
 
 useHead({
-  title: "BandPick 부원",
+  title: computed(() =>
+    formMode.value === "team" ? "BandPick 부원 · 팀제" : "BandPick 부원",
+  ),
 });
 </script>
