@@ -17,6 +17,19 @@
       </button>
 
       <button type="button"
+        class="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="activeTab !== 'matrix' || isSavingMatrix || isLoadingData || !isMatrixDirty" @click="handleSaveMatrix">
+        <svg class="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </svg>
+        {{ isSavingMatrix ? "저장 중..." : "저장" }}
+      </button>
+
+      <button type="button"
         class="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="isMatching" @click="handleStartMatching">
         <svg class="h-4 w-4 shrink-0 text-white" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
@@ -39,6 +52,14 @@
       {{ matchError }}
     </p>
 
+    <p v-if="saveError" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      {{ saveError }}
+    </p>
+
+    <p v-if="saveSuccess" class="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      {{ saveSuccess }}
+    </p>
+
     <section v-if="activeTab === null"
       class="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-16 text-center">
       <p class="text-lg font-medium text-slate-900">
@@ -53,7 +74,14 @@
     <section v-if="activeTab === 'matrix'" class="mt-8 rounded-xl border border-slate-200 bg-white">
       <div class="border-b border-slate-200 px-4 py-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-lg font-semibold">데이터 불러오기</h2>
+          <div>
+            <h2 class="text-lg font-semibold">데이터 불러오기</h2>
+            <p class="mt-1 text-xs text-slate-500">
+              셀을 직접 수정한 뒤 저장하면 DB 희망곡 데이터에 반영됩니다. 형식:
+              <span class="font-medium text-slate-700">1. 이름</span>
+              <span v-if="isMatrixDirty" class="ml-2 font-semibold text-amber-600">저장되지 않은 변경이 있습니다.</span>
+            </p>
+          </div>
           <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span class="inline-flex items-center gap-1.5">
               <span class="h-3 w-3 rounded-sm bg-slate-200/80 ring-1 ring-slate-300" />
@@ -91,17 +119,11 @@
               </th>
 
               <td v-for="session in SESSIONS" :key="`${song}-${session}`"
-                class="border-b border-r border-slate-200 px-2 py-2" :class="matrixCellClass(song, session)">
-                <template v-if="isSessionRequired(song, session)">
-                  <div v-if="songMatrix[song][session].length" class="space-y-0.5 text-center text-slate-700">
-                    <p v-for="entry in songMatrix[song][session]" :key="entry">
-                      {{ entry }}
-                    </p>
-                  </div>
-                  <span v-else class="flex h-full items-center justify-center text-xs font-semibold text-rose-600">
-                    미지원
-                  </span>
-                </template>
+                class="border-b border-r border-slate-200 px-1 py-1" :class="matrixCellClass(song, session)">
+                <textarea v-if="isSessionRequired(song, session)"
+                  v-model="cellDrafts[cellKey(song, session)]" rows="3"
+                  class="min-h-[4.5rem] w-full resize-y rounded-sm bg-transparent px-1 py-1 text-center text-sm leading-5 text-slate-700 outline-none placeholder:text-xs placeholder:font-semibold placeholder:text-rose-600 focus:bg-white focus:ring-2 focus:ring-blue-400"
+                  placeholder="미지원" spellcheck="false" @input="onMatrixEdited" />
               </td>
             </tr>
           </tbody>
@@ -200,15 +222,36 @@ type SetlistItem = {
   positions: string[];
 };
 
+type UserItem = {
+  id: number;
+  code: string;
+  name: string;
+};
+
 type MemberPickEntry = {
   priority: number;
   songTitle: string;
   session: string;
+  setlistId?: number;
 };
 
 type MemberPick = {
+  userId: number;
   name: string;
   picks: MemberPickEntry[];
+};
+
+type MatrixPickPayload = {
+  userId: number;
+  priority: number;
+  setlistId: number;
+  desiredPosition: string;
+  desiredExtra: string;
+};
+
+type MatrixSaveResponse = {
+  savedPickCount: number;
+  message: string;
 };
 
 type MatchingMember = {
@@ -285,6 +328,11 @@ const config = useRuntimeConfig();
 const memberData = ref<MemberPick[]>([]);
 const requiredSessionsBySong = ref<Record<string, string[]>>({});
 const setlistTitles = ref<string[]>([]);
+const setlistIdByTitle = ref<Record<string, number>>({});
+const usersByName = ref<Record<string, UserItem[]>>({});
+const extraByKey = ref<Record<string, string>>({});
+const cellDrafts = ref<Record<string, string>>({});
+const originalDraftsJson = ref("");
 
 const activeTab = ref<
   "matrix" | "matching" | null
@@ -292,8 +340,11 @@ const activeTab = ref<
 
 const isMatching = ref(false);
 const isLoadingData = ref(false);
+const isSavingMatrix = ref(false);
 const loadError = ref("");
 const matchError = ref("");
+const saveError = ref("");
+const saveSuccess = ref("");
 const matchingResults = ref<MatchingResult[]>([]);
 
 const formsApiUrl = computed(() => {
@@ -323,6 +374,19 @@ const algorithmRunUrl = computed(() => {
   return `${host}/algorithm/run`;
 });
 
+const usersApiUrl = computed(() => {
+  const host = String(config.public.apiBase).replace(
+    /\/$/,
+    "",
+  );
+
+  return `${host}/api/v1/users`;
+});
+
+const isMatrixDirty = computed(() => {
+  return JSON.stringify(cellDrafts.value) !== originalDraftsJson.value;
+});
+
 function normalizeSessionLabel(raw: string): string {
   const value = raw.trim();
   if (!value) return "";
@@ -331,6 +395,27 @@ function normalizeSessionLabel(raw: string): string {
   }
   return value;
 }
+function cellKey(song: string, session: string): string {
+  return `${song}::${session}`;
+}
+
+function extraKey(userId: number, song: string, session: string): string {
+  return `${userId}::${song}::${session}`;
+}
+
+function parseSessionParts(raw: string): { session: string; extra: string } {
+  const value = raw.trim();
+  const extraMatch = value.match(/^기타\((.*)\)$/);
+  if (extraMatch) {
+    return { session: "기타", extra: extraMatch[1]?.trim() ?? "" };
+  }
+  return { session: normalizeSessionLabel(value), extra: "" };
+}
+
+function onMatrixEdited() {
+  saveSuccess.value = "";
+}
+
 function isSessionRequired(song: string, session: string): boolean {
   const required = requiredSessionsBySong.value[song];
   // 셋리스트 정보가 없으면 빈 칸을 '미지원'으로 강조 (회색 막지 않음)
@@ -341,8 +426,8 @@ function matrixCellClass(song: string, session: string): string {
   if (!isSessionRequired(song, session)) {
     return "bg-slate-200/80";
   }
-  const applicants = songMatrix.value[song]?.[session] ?? [];
-  if (!applicants.length) {
+  const draft = cellDrafts.value[cellKey(song, session)] ?? "";
+  if (!draft.trim()) {
     return "bg-rose-50";
   }
   return "bg-white";
@@ -351,9 +436,11 @@ function matrixCellClass(song: string, session: string): string {
 async function handleLoadData() {
   isLoadingData.value = true;
   loadError.value = "";
+  saveError.value = "";
+  saveSuccess.value = "";
 
   try {
-    const [forms, setlists] = await Promise.all([
+    const [forms, setlists, users] = await Promise.all([
       $fetch<MemberFormMemberResponse[]>(
         formsApiUrl.value,
         {
@@ -367,25 +454,63 @@ async function handleLoadData() {
           method: "GET",
         },
       ),
+
+      $fetch<UserItem[]>(
+        usersApiUrl.value,
+        {
+          method: "GET",
+        },
+      ),
     ]);
 
     memberData.value = forms.map((form) => ({
+      userId: form.userId,
       name: form.name,
       picks: (form.picks ?? []).map((pick) => ({
         priority: pick.priority,
         songTitle: pick.songTitle,
         session: pick.session,
+        setlistId: pick.setlistId,
       })),
     }));
 
     const requiredMap: Record<string, string[]> = {};
+    const titleToSetlistId: Record<string, number> = {};
     for (const item of setlists) {
       const positions = (item.positions ?? [])
         .map(normalizeSessionLabel)
         .filter(Boolean);
       requiredMap[item.title] = [...new Set(positions)];
+      titleToSetlistId[item.title] = item.id;
     }
+
+    const extras: Record<string, string> = {};
+    for (const form of forms) {
+      for (const pick of form.picks ?? []) {
+        const songName = pick.songTitle?.trim() ?? "";
+        const { session, extra } = parseSessionParts(pick.session ?? "");
+        if (pick.setlistId && songName && !(songName in titleToSetlistId)) {
+          titleToSetlistId[songName] = pick.setlistId;
+        }
+        if (extra) {
+          extras[extraKey(form.userId, songName, session)] = extra;
+        }
+      }
+    }
+
     requiredSessionsBySong.value = requiredMap;
+    setlistIdByTitle.value = titleToSetlistId;
+    extraByKey.value = extras;
+
+    const nameMap: Record<string, UserItem[]> = {};
+    for (const user of users) {
+      const name = user.name.trim();
+      if (!nameMap[name]) {
+        nameMap[name] = [];
+      }
+      nameMap[name].push(user);
+    }
+    usersByName.value = nameMap;
 
     const titlesFromSetlists = setlists.map((item) => item.title);
     const titlesFromForms = forms.flatMap((form) =>
@@ -399,6 +524,43 @@ async function handleLoadData() {
       ]),
     ];
 
+    const drafts: Record<string, string> = {};
+    setlistTitles.value.forEach((song) => {
+      SESSIONS.forEach((session) => {
+        drafts[cellKey(song, session)] = "";
+      });
+    });
+
+    memberData.value.forEach((member) => {
+      member.picks.forEach((pick) => {
+        const songName = pick.songTitle?.trim() ?? "";
+        const { session } = parseSessionParts(pick.session ?? "");
+        const key = cellKey(songName, session);
+        if (!(key in drafts)) {
+          return;
+        }
+        const line = `${pick.priority}. ${member.name}`;
+        drafts[key] = drafts[key] ? `${drafts[key]}\n${line}` : line;
+      });
+    });
+
+    setlistTitles.value.forEach((song) => {
+      SESSIONS.forEach((session) => {
+        const key = cellKey(song, session);
+        const lines = drafts[key]
+          .split("\n")
+          .filter(Boolean)
+          .sort((a, b) => {
+            const priorityA = Number.parseInt(a.split(".")[0] ?? "999", 10);
+            const priorityB = Number.parseInt(b.split(".")[0] ?? "999", 10);
+            return priorityA - priorityB;
+          });
+        drafts[key] = lines.join("\n");
+      });
+    });
+
+    cellDrafts.value = drafts;
+    originalDraftsJson.value = JSON.stringify(drafts);
     activeTab.value = "matrix";
   } catch (error) {
     console.error("[load-data]", error);
@@ -410,42 +572,147 @@ async function handleLoadData() {
   }
 }
 
-const songMatrix = computed<
-  Record<string, Record<string, string[]>>
->(() => {
-  const matrix: Record<
-    string,
-    Record<string, string[]>
-  > = {};
+function parseDraftLine(
+  raw: string,
+  fallbackPriority: number,
+): { priority: number; name: string } | null {
+  const line = raw.trim();
+  if (!line) {
+    return null;
+  }
 
-  setlistTitles.value.forEach((song) => {
-    matrix[song] = {};
-    SESSIONS.forEach((session) => {
-      matrix[song][session] = [];
-    });
-  });
+  const matched = line.match(/^(\d+)\s*[.．:：]\s*(.+)$/);
+  if (matched) {
+    const name = matched[2]?.trim() ?? "";
+    if (!name) {
+      return null;
+    }
+    return {
+      priority: Number.parseInt(matched[1] ?? "0", 10),
+      name,
+    };
+  }
 
+  return {
+    priority: fallbackPriority,
+    name: line,
+  };
+}
 
-  memberData.value.forEach((member) => {
-    member.picks.forEach((pick) => {
-      const songName = pick.songTitle?.trim() ?? "";
-      const session = normalizeSessionLabel(pick.session ?? "");
-      if (matrix[songName]?.[session]) {
-        matrix[songName][session].push(`${pick.priority}. ${member.name}`);
+function resolveUserByName(name: string): UserItem {
+  const matches = usersByName.value[name] ?? [];
+  if (matches.length === 1) {
+    return matches[0];
+  }
+  if (matches.length > 1) {
+    throw new Error(`동명이인 "${name}"이(가) 있어 저장할 수 없습니다. 부원 정보에서 이름을 구분해 주세요.`);
+  }
+  throw new Error(`이름 "${name}"에 해당하는 부원을 찾을 수 없습니다.`);
+}
+
+function buildMatrixPayload(): MatrixPickPayload[] {
+  const picks: MatrixPickPayload[] = [];
+  const seenInCell = new Set<string>();
+
+  for (const song of setlistTitles.value) {
+    for (const session of SESSIONS) {
+      const draft = cellDrafts.value[cellKey(song, session)] ?? "";
+      const setlistId = setlistIdByTitle.value[song];
+      if (!setlistId) {
+        if (draft.trim()) {
+          throw new Error(`곡 "${song}"의 셋리스트 ID를 찾을 수 없어 저장할 수 없습니다.`);
+        }
+        continue;
       }
+
+      const lines = draft.split("\n");
+      let fallbackPriority = 0;
+      const namesInCell = new Set<string>();
+
+      for (const rawLine of lines) {
+        if (!rawLine.trim()) {
+          continue;
+        }
+        fallbackPriority += 1;
+        const parsed = parseDraftLine(rawLine, fallbackPriority);
+        if (!parsed) {
+          throw new Error(`곡 "${song}" / ${session}: "${rawLine}" 형식을 읽을 수 없습니다. 예: 1. 홍길동`);
+        }
+
+        if (namesInCell.has(parsed.name)) {
+          throw new Error(`곡 "${song}" / ${session}: "${parsed.name}"이(가) 중복되어 있습니다.`);
+        }
+        namesInCell.add(parsed.name);
+
+        const user = resolveUserByName(parsed.name);
+        const uniqueKey = `${user.id}::${song}::${session}`;
+        if (seenInCell.has(uniqueKey)) {
+          continue;
+        }
+        seenInCell.add(uniqueKey);
+
+        picks.push({
+          userId: user.id,
+          priority: parsed.priority,
+          setlistId,
+          desiredPosition: session,
+          desiredExtra: extraByKey.value[extraKey(user.id, song, session)] ?? "",
+        });
+      }
+    }
+  }
+
+  return picks;
+}
+
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) {
+      return data;
+    }
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
+}
+
+async function handleSaveMatrix() {
+  if (activeTab.value !== "matrix") {
+    return;
+  }
+
+  isSavingMatrix.value = true;
+  saveError.value = "";
+  saveSuccess.value = "";
+
+  try {
+    const picks = buildMatrixPayload();
+    const response = await $fetch<MatrixSaveResponse>(formsApiUrl.value, {
+      method: "PUT",
+      body: { picks },
     });
-  });
-  setlistTitles.value.forEach((song) => {
-    SESSIONS.forEach((session) => {
-      matrix[song][session].sort((a, b) => {
-        const priorityA = Number.parseInt(a.split(".")[0] ?? "999", 10);
-        const priorityB = Number.parseInt(b.split(".")[0] ?? "999", 10);
-        return priorityA - priorityB;
-      });
-    });
-  });
-  return matrix;
-});
+
+    originalDraftsJson.value = JSON.stringify(cellDrafts.value);
+    saveSuccess.value = response.message
+      || `희망곡 ${response.savedPickCount}건을 DB에 저장했습니다.`;
+  } catch (error) {
+    console.error("[save-matrix]", error);
+    saveError.value = extractApiErrorMessage(
+      error,
+      "저장에 실패했습니다. 서버 상태와 입력 형식을 확인해주세요.",
+    );
+  } finally {
+    isSavingMatrix.value = false;
+  }
+}
 
 function sortMembersBySession(
   members: MatchingMember[],
@@ -641,6 +908,11 @@ function normalizeMatchResponse(
 }
 
 async function handleStartMatching() {
+  if (isMatrixDirty.value
+    && !window.confirm("저장하지 않은 수정이 있습니다. 저장하지 않고 현재 DB 데이터로 매칭할까요?")) {
+    return;
+  }
+
   isMatching.value = true;
   matchError.value = "";
 
