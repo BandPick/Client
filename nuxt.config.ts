@@ -5,6 +5,9 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "BandPick Client",
+      link: [
+        { rel: "icon", type: "image/png", href: "/images/arpeggio-logo.png" },
+      ],
     },
   },
   runtimeConfig: {

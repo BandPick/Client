@@ -124,22 +124,21 @@
           </fieldset>
         </div>
 
-        <p v-if="successMessage"
-          class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {{ successMessage }}
-        </p>
-
-        <p v-if="errorMessage"
-          class="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">
-          {{ errorMessage }}
-        </p>
-
         <button type="submit" :disabled="submitting"
           class="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
           {{ submitLabel }}
         </button>
       </form>
     </section>
+
+    <CommonAlertDialog
+      :open="alertOpen"
+      :type="alertType"
+      :title="alertTitle"
+      :message="alertMessage"
+      @close="alertOpen = false"
+      @confirm="alertOpen = false"
+    />
   </div>
 </template>
 
@@ -152,9 +151,11 @@ const secret = ref("");
 const showSecret = ref(false);
 const role = ref<Role>("member");
 const memberMode = ref<MemberMode>("login");
-const errorMessage = ref("");
-const successMessage = ref("");
 const submitting = ref(false);
+const alertOpen = ref(false);
+const alertType = ref<"success" | "error">("error");
+const alertTitle = ref("");
+const alertMessage = ref("");
 const { login, register, adminLogin, saveAuthUser, saveAdminSession } = useAuthApi();
 const config = useRuntimeConfig();
 
@@ -176,10 +177,16 @@ const submitLabel = computed(() => {
   return memberMode.value === "register" ? "계정 등록" : "로그인";
 });
 
+function showAlert(type: "success" | "error", message: string, title = "") {
+  alertType.value = type;
+  alertTitle.value = title;
+  alertMessage.value = message;
+  alertOpen.value = true;
+}
+
 function setRole(next: Role) {
   role.value = next;
-  errorMessage.value = "";
-  successMessage.value = "";
+  alertOpen.value = false;
   showSecret.value = false;
   if (next === "admin") {
     memberMode.value = "login";
@@ -221,11 +228,9 @@ function extractApiMessage(error: unknown) {
 }
 
 async function handleSubmit() {
-  errorMessage.value = "";
-  successMessage.value = "";
   const validationError = validateForm();
   if (validationError) {
-    errorMessage.value = validationError;
+    showAlert("error", validationError, "입력 확인");
     return;
   }
 
@@ -240,17 +245,21 @@ async function handleSubmit() {
       if (memberMode.value === "register") {
         const response = await register(payload);
         if (!response.success) {
-          errorMessage.value = response.message || "계정 등록에 실패했습니다.";
+          showAlert("error", response.message || "계정 등록에 실패했습니다.", "계정 등록");
           return;
         }
-        successMessage.value = response.message || "계정 등록에 성공했습니다. 로그인해 주세요.";
+        showAlert(
+          "success",
+          response.message || "계정 등록에 성공했습니다. 로그인해 주세요.",
+          "계정 등록",
+        );
         memberMode.value = "login";
         return;
       }
 
       const response = await login(payload);
       if (!response.success || !response.user) {
-        errorMessage.value = response.message || "로그인에 실패했습니다.";
+        showAlert("error", response.message || "로그인에 실패했습니다.", "로그인");
         return;
       }
 
@@ -265,7 +274,7 @@ async function handleSubmit() {
     });
 
     if (!response.success) {
-      errorMessage.value = response.message || "기획자 로그인에 실패했습니다.";
+      showAlert("error", response.message || "기획자 로그인에 실패했습니다.", "로그인");
       return;
     }
 
@@ -282,11 +291,15 @@ async function handleSubmit() {
 
     const apiBase = String(config.public.apiBase);
     if (isLoginNetworkError(error)) {
-      errorMessage.value = `백엔드 서버에 연결할 수 없습니다. Spring Boot가 실행 중인지 확인해 주세요. (요청 주소: ${apiBase}/api/v1/auth)`;
+      showAlert(
+        "error",
+        `백엔드 서버에 연결할 수 없습니다. Spring Boot가 실행 중인지 확인해 주세요. (요청 주소: ${apiBase}/api/v1/auth)`,
+        "연결 실패",
+      );
       return;
     }
 
-    errorMessage.value = extractApiMessage(error);
+    showAlert("error", extractApiMessage(error));
   } finally {
     submitting.value = false;
   }
