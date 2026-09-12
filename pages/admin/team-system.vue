@@ -49,13 +49,13 @@
         </div>
       </div>
 
-      <div v-if="!boards.length"
+      <div v-if="!boards.length && !unassignedPool.length"
         class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-        {{ isMatching ? "팀 배정 결과를 불러오는 중..." : "배정된 팀이 없습니다." }}
+        {{ isMatching || isLoading ? "팀 배정 결과를 불러오는 중..." : "제출된 팀제 신청이 없습니다." }}
       </div>
 
-      <!-- 미배정 인원 -->
-      <div v-if="boards.length"
+      <!-- 미배정 인원: 팀이 없어도 제출한 부원은 여기에 표시 -->
+      <div v-if="boards.length || unassignedPool.length"
         class="mb-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-3 transition" :class="{
           'border-blue-400 bg-blue-50': dropTarget === 'pool',
         }" @dragover.prevent="dropTarget = 'pool'" @dragleave="onPoolDragLeave" @drop="onDropToPool">
@@ -486,428 +486,6 @@ const knownPeople = ref<Map<number, Occupant>>(new Map());
 
 const isDirty = ref(false);
 
-const isDummyData = ref(false);
-
-/* =========================================================
- * 더미 데이터
- * ========================================================= */
-
-const DUMMY_USERS: UserInfo[] = [
-  {
-    id: 1,
-    code: "",
-    name: "정시연",
-  },
-  {
-    id: 2,
-    code: "22-102",
-    name: "이선재",
-  },
-  {
-    id: 3,
-    code: "22-103",
-    name: "권시현",
-  },
-  {
-    id: 4,
-    code: "23-104",
-    name: "정윤섭",
-  },
-  {
-    id: 5,
-    code: "23-105",
-    name: "김정인",
-  },
-  {
-    id: 6,
-    code: "23-106",
-    name: "인세훈",
-  },
-  {
-    id: 7,
-    code: "24-107",
-    name: "박주언",
-  },
-  {
-    id: 8,
-    code: "24-108",
-    name: "문성훈",
-  },
-  {
-    id: 9,
-    code: "24-109",
-    name: "옥윤택",
-  },
-  {
-    id: 10,
-    code: "24-110",
-    name: "김채은",
-  },
-  {
-    id: 11,
-    code: "25-111",
-    name: "안수빈",
-  },
-  {
-    id: 12,
-    code: "25-112",
-    name: "김솔",
-  },
-];
-
-const DUMMY_TEAM_FORMS: TeamFormMember[] = [
-  {
-    userId: 1,
-    name: "정시연",
-    code: "22-101",
-    teammates: "이선재",
-    maxTeams: 2,
-    positions: [
-      {
-        position: "V",
-        level: "상",
-      },
-      {
-        position: "EG1",
-        level: "중",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "월",
-        startTime: "18:00",
-      },
-      {
-        dayOfWeek: "수",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 2,
-    name: "이선재",
-    code: "22-102",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "D",
-        level: "중",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "월",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 3,
-    name: "권시현",
-    code: "22-103",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "B",
-        level: "상",
-      },
-      {
-        position: "AG",
-        level: "하",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "화",
-        startTime: "19:00",
-      },
-    ],
-  },
-
-  {
-    userId: 4,
-    name: "정윤섭",
-    code: "23-104",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "EG1",
-        level: "중",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "월",
-        startTime: "18:00",
-      },
-      {
-        dayOfWeek: "목",
-        startTime: "20:00",
-      },
-    ],
-  },
-
-  {
-    userId: 5,
-    name: "김정인",
-    code: "23-105",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "EG2",
-        level: "하",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "화",
-        startTime: "19:00",
-      },
-    ],
-  },
-
-  {
-    userId: 6,
-    name: "인세훈",
-    code: "23-106",
-    teammates: "옥윤택",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "K",
-        level: "상",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "수",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 7,
-    name: "박주언",
-    code: "24-107",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "V",
-        level: "중",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "목",
-        startTime: "20:00",
-      },
-    ],
-  },
-
-  {
-    userId: 8,
-    name: "문성훈",
-    code: "24-108",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "D",
-        level: "하",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "금",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 9,
-    name: "옥윤택",
-    code: "24-109",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "B",
-        level: "중",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "금",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 10,
-    name: "김채은",
-    code: "24-110",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "AG",
-        level: "상",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "월",
-        startTime: "19:00",
-      },
-    ],
-  },
-
-  {
-    userId: 11,
-    name: "안수빈",
-    code: "25-111",
-    teammates: "",
-    maxTeams: 1,
-    positions: [
-      {
-        position: "EG1",
-        level: "하",
-      },
-    ],
-    schedules: [
-      {
-        dayOfWeek: "화",
-        startTime: "18:00",
-      },
-    ],
-  },
-
-  {
-    userId: 12,
-    name: "김솔",
-    code: "25-112",
-    teammates: "",
-    maxTeams: 1,
-    positions: [],
-    schedules: [],
-  },
-];
-
-/* =========================================================
- * 더미 매칭 결과
- * ========================================================= */
-
-const DUMMY_MATCH_RESULT: MatchResult = {
-  teams: [
-    {
-      name: "A팀",
-      status: "구성 완료",
-      note: "",
-      members: [
-        {
-          userId: 1,
-          session: "V",
-          name: "정시연",
-          level: "상",
-        },
-        {
-          userId: 2,
-          session: "D",
-          name: "이선재",
-          level: "중",
-        },
-        {
-          userId: 3,
-          session: "B",
-          name: "권시현",
-          level: "상",
-        },
-        {
-          userId: 1,
-          session: "EG1",
-          name: "정시연",
-          level: "중",
-        },
-        {
-          userId: 5,
-          session: "EG2",
-          name: "김정인",
-          level: "하",
-        },
-        {
-          userId: 10,
-          session: "AG",
-          name: "김채은",
-          level: "상",
-        },
-        {
-          userId: 6,
-          session: "K",
-          name: "인세훈",
-          level: "상",
-        },
-      ],
-    },
-
-    {
-      name: "B팀",
-      status: "포지션 부족",
-      note: "",
-      members: [
-        {
-          userId: 7,
-          session: "V",
-          name: "박주언",
-          level: "중",
-        },
-        {
-          userId: 2,
-          session: "D",
-          name: "이선재",
-          level: "중",
-        },
-        {
-          userId: 9,
-          session: "B",
-          name: "옥윤택",
-          level: "중",
-        },
-        {
-          userId: 4,
-          session: "EG1",
-          name: "정윤섭",
-          level: "중",
-        },
-      ],
-    },
-  ],
-
-  unmatched: [
-    {
-      userId: 8,
-      name: "문성훈",
-    },
-    {
-      userId: 11,
-      name: "안수빈",
-    },
-    {
-      userId: 12,
-      name: "김솔",
-    },
-  ],
-};
-
 /* =========================================================
  * API URL
  * ========================================================= */
@@ -989,22 +567,14 @@ async function loadSubmissionStatus() {
       users,
       forms
     );
-
-    isDummyData.value = false;
   } catch {
-    /*
-     * 서버 연결 실패 시
-     * 더미 데이터로 화면 확인
-     */
-    rows.value = buildRows(
-      DUMMY_USERS,
-      DUMMY_TEAM_FORMS
-    );
-
-    isDummyData.value = true;
+    rows.value = [];
+    errorMessage.value =
+      "제출 현황을 불러오지 못했습니다. 서버와 API 경로를 확인해주세요.";
   } finally {
     isLoading.value = false;
     syncPool();
+    ensureAssignableBoard();
   }
 }
 
@@ -1165,18 +735,12 @@ async function handleMatch() {
     buildBoardsFromMatchResult(
       result
     );
-
-    isDummyData.value = false;
+    ensureAssignableBoard();
   } catch {
-    /*
-     * 서버 연결 실패 시
-     * 더미 매칭 결과 사용
-     */
-    buildBoardsFromMatchResult(
-      DUMMY_MATCH_RESULT
-    );
-
-    isDummyData.value = true;
+    matchError.value =
+      "자동 팀 배정에 실패했습니다. 제출된 인원은 미배정으로 표시합니다.";
+    ensureAssignableBoard();
+    syncPool();
   } finally {
     isMatching.value = false;
   }
@@ -1434,21 +998,6 @@ async function saveAssignments() {
   isSaving.value = true;
   saveError.value = "";
 
-  /*
-   * 더미 데이터에서는 실제 API 호출하지 않음
-   */
-  if (isDummyData.value) {
-    await new Promise(
-      (resolve) =>
-        setTimeout(resolve, 400)
-    );
-
-    isDirty.value = false;
-    isSaving.value = false;
-
-    return;
-  }
-
   try {
     await $fetch(
       `${teamFormsApiUrl.value}/assignments`,
@@ -1492,8 +1041,28 @@ async function saveAssignments() {
  * 초기 실행
  * ========================================================= */
 
-onMounted(() => {
-  loadSubmissionStatus();
-  handleMatch();
+function emptyBoard(name: string): Board {
+  return {
+    name,
+    status: "수동 배정",
+    note: "제출 인원이 적어 자동으로 팀을 만들지 못했습니다. 미배정 인원을 끌어다 배정하세요.",
+    slots: POSITION_LIST.map((position) => ({
+      position,
+      occupant: null,
+    })),
+  };
+}
+
+function ensureAssignableBoard() {
+  if (boards.value.length > 0) return;
+  if (!rows.value.some((row) => row.submitted)) return;
+  boards.value = [emptyBoard("A팀")];
+}
+
+onMounted(async () => {
+  await loadSubmissionStatus();
+  await handleMatch();
+  ensureAssignableBoard();
+  syncPool();
 });
 </script>
