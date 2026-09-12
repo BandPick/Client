@@ -148,3 +148,94 @@ export function buildMemberFormAvailabilities(
 
   return availabilities;
 }
+
+export function parseLocalDateTime(value: string): Date | null {
+  const match = String(value).match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/,
+  );
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+    );
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function padTimePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+export function slotsFromAvailabilities(
+  availabilities: { availableFrom: string; availableTo: string }[],
+  validTimes: string[],
+): string[] {
+  const timeSet = new Set(validTimes);
+  const result = new Set<string>();
+
+  for (const range of availabilities) {
+    const from = parseLocalDateTime(range.availableFrom);
+    const to = parseLocalDateTime(range.availableTo);
+    if (!from || !to) continue;
+
+    const cursor = new Date(from.getTime());
+    while (cursor.getTime() < to.getTime()) {
+      const day = ["일", "월", "화", "수", "목", "금", "토"][cursor.getDay()];
+      const time = `${padTimePart(cursor.getHours())}:${padTimePart(cursor.getMinutes())}`;
+      if (day && DAY_OFFSET[day] != null && timeSet.has(time)) {
+        result.add(`${day}-${time}`);
+      }
+      cursor.setMinutes(cursor.getMinutes() + 30);
+    }
+  }
+
+  return Array.from(result);
+}
+
+export function slotsFromTeamSchedules(
+  schedules: { dayOfWeek: string; startTime: string }[],
+  validTimes: string[],
+): string[] {
+  const timeSet = new Set(validTimes);
+  const result: string[] = [];
+  for (const schedule of schedules) {
+    const day = String(schedule.dayOfWeek ?? "").trim();
+    const time = String(schedule.startTime ?? "").trim().slice(0, 5);
+    if (!day || !timeSet.has(time)) continue;
+    result.push(`${day}-${time}`);
+  }
+  return result;
+}
+
+export function groupPicksForForm(
+  picks: { priority: number; setlistId: number; session: string }[],
+  minRows: number,
+): { songId: string; sessions: string[] }[] {
+  const byPriority = new Map<number, { songId: string; sessions: string[] }>();
+  const sorted = [...picks].sort((a, b) => a.priority - b.priority);
+
+  for (const pick of sorted) {
+    if (!pick.setlistId || pick.priority <= 0) continue;
+    const songId = String(pick.setlistId);
+    const existing = byPriority.get(pick.priority);
+    if (existing) {
+      if (pick.session && !existing.sessions.includes(pick.session)) {
+        existing.sessions.push(pick.session);
+      }
+      continue;
+    }
+    byPriority.set(pick.priority, {
+      songId,
+      sessions: pick.session ? [pick.session] : [],
+    });
+  }
+
+  const maxPriority = Math.max(minRows, ...byPriority.keys(), 0);
+  return Array.from({ length: maxPriority }, (_, index) => {
+    return byPriority.get(index + 1) ?? { songId: "", sessions: [] };
+  });
+}

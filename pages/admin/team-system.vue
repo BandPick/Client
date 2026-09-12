@@ -242,10 +242,10 @@
                   참여 가능한 팀 수
                 </th>
 
-                <!-- 희망 팀원 -->
+                <!-- 기획자에게 하고 싶은 말 -->
                 <th
-                  class="border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
-                  희망 팀원
+                  class="min-w-[220px] border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  기획자에게
                 </th>
               </tr>
             </thead>
@@ -324,15 +324,11 @@
                   </span>
                 </td>
 
-                <!-- 희망 팀원 -->
+                <!-- 기획자에게 하고 싶은 말 -->
                 <td class="px-5 py-4 align-middle">
-                  <span v-if="
-                    row.submitted &&
-                    row.teammates
-                  " class="text-sm text-slate-600">
-                    {{ row.teammates }}
-                  </span>
-
+                  <p v-if="row.submitted && row.message" class="max-w-xs whitespace-pre-wrap text-sm text-slate-700">
+                    {{ row.message }}
+                  </p>
                   <span v-else class="text-xs text-slate-400">
                     -
                   </span>
@@ -368,13 +364,15 @@ type UserInfo = {
 type TeamFormPosition = {
   position: string;
   level: string;
+  priority?: number;
 };
 
 type TeamFormMember = {
   userId: number;
   name: string;
   code: string;
-  teammates: string;
+  message?: string;
+  teammates?: string;
   maxTeams: number;
   positions: TeamFormPosition[];
   schedules: {
@@ -389,7 +387,7 @@ type SubmissionRow = {
   name: string;
   submitted: boolean;
   positions: string[];
-  teammates: string;
+  message: string;
   maxTeams: number;
   scheduleCount: number;
 };
@@ -613,13 +611,20 @@ function buildRows(
         ),
 
         positions:
-          (form?.positions ?? []).map(
-            (item) =>
-              `${item.position}(${item.level})`
-          ),
+          [...(form?.positions ?? [])]
+            .sort((a, b) => {
+              const aRank = a.priority && a.priority > 0 ? a.priority : 999;
+              const bRank = b.priority && b.priority > 0 ? b.priority : 999;
+              return aRank - bRank;
+            })
+            .map((item) =>
+              item.priority && item.priority > 0
+                ? `${item.priority}순위 ${item.position}(${item.level})`
+                : `${item.position}(${item.level})`,
+            ),
 
-        teammates:
-          form?.teammates?.trim() ?? "",
+        message:
+          (form?.message ?? form?.teammates ?? "").trim(),
 
         maxTeams: form?.maxTeams ?? 1,
 
