@@ -8,14 +8,14 @@
           </h1>
           <div class="mt-3 grid w-full max-w-[240px] grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             <button type="button" class="rounded-lg px-3 py-2 text-sm font-semibold transition" :class="formMode === 'song'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
               " @click="formMode = 'song'">
               일반
             </button>
             <button type="button" class="rounded-lg px-3 py-2 text-sm font-semibold transition" :class="formMode === 'team'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
               " @click="formMode = 'team'">
               팀제
             </button>
@@ -31,12 +31,6 @@
         <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
       </div>
 
-      <p v-if="saveFeedback" class="mt-4 rounded-lg border px-3 py-2 text-sm" :class="saveFeedbackType === 'error'
-          ? 'border-rose-200 bg-rose-50 text-rose-600'
-          : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-        ">
-        {{ saveFeedback }}
-      </p>
       <p v-if="settingsError"
         class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
         {{ settingsError }}
@@ -44,12 +38,8 @@
 
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="min-w-0 space-y-5 sm:space-y-6">
-          <MemberTeamFormFields
-            v-if="formMode === 'team'"
-            v-model:skills="teamSkills"
-            v-model:preferred-teammates="preferredTeammates"
-            v-model:max-teams="maxTeams"
-          />
+          <MemberTeamFormFields v-if="formMode === 'team'" v-model:skills="teamSkills"
+            v-model:preferred-teammates="preferredTeammates" v-model:max-teams="maxTeams" />
           <div v-else>
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
               희망 곡 및 세션
@@ -101,12 +91,12 @@
                     <button v-for="session in getDisplaySessionsForSong(pick.songId)" :key="`${pick.songId}-${session}`"
                       type="button" class="rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:text-sm"
                       :class="pick.sessions.includes(session)
-                          ? 'border-blue-500 bg-blue-100 text-blue-700'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'
+                        ? 'border-blue-500 bg-blue-100 text-blue-700'
+                        : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600'
                         " :disabled="isSessionBlockedForPick(index, session)" :title="isSessionBlockedForPick(index, session)
                           ? '이미 다른 지망에서 선택한 곡·세션입니다.'
                           : ''
-                        " @click="toggleSession(index, session)">
+                          " @click="toggleSession(index, session)">
                       {{ getSessionLabel(pick.songId, session) }}
                     </button>
                   </div>
@@ -175,8 +165,8 @@
         <button type="button"
           class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
           :disabled="saving || settingsLoading || isDeadlinePassed" :class="saving || settingsLoading || isDeadlinePassed
-              ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
-              : ''
+            ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
+            : ''
             " @click="handleSave">
           {{
             saving
@@ -188,6 +178,16 @@
         </button>
       </div>
     </section>
+
+    <CommonAlertDialog
+      :open="alertOpen"
+      :type="alertType"
+      :title="alertTitle"
+      :message="alertMessage"
+      :action-label="alertActionLabel"
+      @close="alertOpen = false"
+      @confirm="onAlertConfirm"
+    />
   </div>
 </template>
 
@@ -216,8 +216,12 @@ const days = ["월", "화", "수", "목", "금"];
 const songs = ref<MemberSetlistSong[]>([]);
 const setlistLoading = ref(true);
 const setlistError = ref("");
-const saveFeedback = ref("");
-const saveFeedbackType = ref<"error" | "success">("error");
+const alertOpen = ref(false);
+const alertType = ref<"success" | "error">("error");
+const alertTitle = ref("");
+const alertMessage = ref("");
+const alertActionLabel = ref("확인");
+const goHomeOnConfirm = ref(false);
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
 const { loadMemberSettings, submitMemberForm, submitTeamForm } = useMemberFormApi();
 const { loadAuthUser } = useAuthApi();
@@ -397,11 +401,18 @@ function removePick(index: number) {
   pruneDuplicatePairs();
 }
 
+function validateScheduleForSave(): string {
+  if (selectedSlots.value.size === 0) {
+    return "스케줄표를 작성해 주세요.";
+  }
+  return "";
+}
+
 function validatePicksForSave(): string {
   if (filledRoleCount.value < REQUIRED_MIN_ROLES) {
     return `희망 세션을 최소 ${REQUIRED_MIN_ROLES}개 이상 선택해 주세요. (현재 ${filledRoleCount.value}개)`;
   }
-  return "";
+  return validateScheduleForSave();
 }
 
 function selectedTeamPositions() {
@@ -436,7 +447,7 @@ function validateTeamFormForSave(): string {
   if (maxTeams.value < 1 || maxTeams.value > 3) {
     return "참여 가능 팀 수는 1팀부터 3팀까지 선택할 수 있습니다.";
   }
-  return "";
+  return validateScheduleForSave();
 }
 
 function saveSubmissionDraft(body: unknown) {
@@ -457,6 +468,29 @@ function saveTeamSubmissionDraft(body: unknown) {
   }
 }
 
+function showAlert(
+  type: "success" | "error",
+  message: string,
+  title = "",
+  options?: { actionLabel?: string; goHomeOnConfirm?: boolean },
+) {
+  alertType.value = type;
+  alertTitle.value = title;
+  alertMessage.value = message;
+  alertActionLabel.value = options?.actionLabel || "확인";
+  goHomeOnConfirm.value = options?.goHomeOnConfirm ?? false;
+  alertOpen.value = true;
+}
+
+async function onAlertConfirm() {
+  const goHome = goHomeOnConfirm.value;
+  alertOpen.value = false;
+  goHomeOnConfirm.value = false;
+  if (goHome) {
+    await navigateTo("/");
+  }
+}
+
 function isSubmissionNetworkError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const err = error as { message?: string; cause?: { code?: string } };
@@ -470,21 +504,17 @@ function isSubmissionNetworkError(error: unknown): boolean {
 }
 
 async function handleSave() {
-  saveFeedback.value = "";
   if (saving.value) return;
   if (settingsLoading.value) {
-    saveFeedbackType.value = "error";
-    saveFeedback.value = "마감 설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.";
+    showAlert("error", "마감 설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.", "저장 실패");
     return;
   }
   if (!deadlineAt.value) {
-    saveFeedbackType.value = "error";
-    saveFeedback.value = "마감 시간이 설정되지 않았습니다. 관리자에게 문의해 주세요.";
+    showAlert("error", "마감 시간이 설정되지 않았습니다. 관리자에게 문의해 주세요.", "저장 실패");
     return;
   }
   if (isDeadlinePassed.value) {
-    saveFeedbackType.value = "error";
-    saveFeedback.value = "신청 마감 시간이 지나 제출할 수 없습니다.";
+    showAlert("error", "신청 마감 시간이 지나 제출할 수 없습니다.", "저장 실패");
     return;
   }
   if (formMode.value === "team") {
@@ -493,8 +523,7 @@ async function handleSave() {
   }
   const validationError = validatePicksForSave();
   if (validationError) {
-    saveFeedbackType.value = "error";
-    saveFeedback.value = validationError;
+    showAlert("error", validationError, "ERROR");
     return;
   }
   const requestBody = {
@@ -513,23 +542,31 @@ async function handleSave() {
   saving.value = true;
   try {
     const response = await submitMemberForm(requestBody);
-    saveFeedbackType.value = response.success ? "success" : "error";
-    saveFeedback.value = response.message
-      ? response.message
-      : response.success
-        ? "신청 정보가 저장되었습니다."
-        : "신청 저장에 실패했습니다.";
+    if (response.success) {
+      showAlert(
+        "success",
+        response.message || "제출 되었습니다.",
+        "완료",
+        { actionLabel: "메인 화면으로", goHomeOnConfirm: true },
+      );
+      return;
+    }
+    showAlert("error", response.message || "제출에 실패했습니다.", "저장 실패");
   } catch (error) {
     if (import.meta.dev && isSubmissionNetworkError(error)) {
       saveSubmissionDraft(requestBody);
-      saveFeedbackType.value = "success";
-      saveFeedback.value =
-        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.";
+      showAlert(
+        "success",
+        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.",
+        "임시 저장",
+      );
       return;
     }
-    saveFeedbackType.value = "error";
-    saveFeedback.value =
-      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.";
+    showAlert(
+      "error",
+      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.",
+      "저장 실패",
+    );
   } finally {
     saving.value = false;
   }
@@ -551,8 +588,7 @@ function extractSaveErrorMessage(error: unknown, fallback: string) {
 async function handleTeamSave() {
   const validationError = validateTeamFormForSave();
   if (validationError) {
-    saveFeedbackType.value = "error";
-    saveFeedback.value = validationError;
+    showAlert("error", validationError, "ERROR");
     return;
   }
 
@@ -568,28 +604,42 @@ async function handleTeamSave() {
     const user = loadAuthUser();
     if (!user) {
       saveTeamSubmissionDraft(requestBody);
-      saveFeedbackType.value = import.meta.dev ? "success" : "error";
-      saveFeedback.value = import.meta.dev
-        ? "로그인 정보가 없어 입력 내용을 브라우저에 임시 저장했습니다."
-        : "로그인 정보가 없습니다. 다시 로그인해 주세요.";
+      if (import.meta.dev) {
+        showAlert(
+          "success",
+          "로그인 정보가 없어 입력 내용을 브라우저에 임시 저장했습니다.",
+          "임시 저장",
+        );
+      } else {
+        showAlert("error", "로그인 정보가 없습니다. 다시 로그인해 주세요.", "저장 실패");
+      }
       return;
     }
 
     const response = await submitTeamForm(user.id, requestBody);
-    saveFeedbackType.value = "success";
-    saveFeedback.value = response.message || "팀제 신청이 저장되었습니다.";
+    showAlert(
+      "success",
+      response.message || "제출되었습니다.",
+      "완료",
+      { actionLabel: "메인 화면으로", goHomeOnConfirm: true },
+    );
   } catch (error) {
     if (import.meta.dev && isSubmissionNetworkError(error)) {
       saveTeamSubmissionDraft(requestBody);
-      saveFeedbackType.value = "success";
-      saveFeedback.value =
-        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.";
+      showAlert(
+        "success",
+        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.",
+        "임시 저장",
+      );
       return;
     }
-    saveFeedbackType.value = "error";
-    saveFeedback.value = extractSaveErrorMessage(
-      error,
-      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.",
+    showAlert(
+      "error",
+      extractSaveErrorMessage(
+        error,
+        "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.",
+      ),
+      "저장 실패",
     );
   } finally {
     saving.value = false;
@@ -706,7 +756,8 @@ onBeforeUnmount(() => {
 });
 
 watch(formMode, (mode) => {
-  saveFeedback.value = "";
+  alertOpen.value = false;
+  goHomeOnConfirm.value = false;
   if (!import.meta.client) return;
   try {
     localStorage.setItem(LOCAL_FORM_MODE_KEY, mode);
