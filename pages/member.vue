@@ -2,9 +2,37 @@
   <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
       <div class="flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          공연 참가 정보 입력
-        </h1>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            공연 참가 정보 입력
+          </h1>
+          <div class="mt-3 grid w-full max-w-[240px] grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm font-semibold transition"
+              :class="
+                formMode === 'song'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              "
+              @click="formMode = 'song'"
+            >
+              희망곡
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm font-semibold transition"
+              :class="
+                formMode === 'team'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              "
+              @click="formMode = 'team'"
+            >
+              팀제
+            </button>
+          </div>
+        </div>
         <div class="hidden text-right text-xs font-medium text-slate-500 sm:block">
           <p>신청 마감 시간 {{ deadlineDisplay }}</p>
           <p class="mt-0.5">신청 마감까지 {{ timeRemainingLabel }}</p>
@@ -35,7 +63,12 @@
 
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="min-w-0 space-y-5 sm:space-y-6">
-          <div>
+          <MemberTeamFormFields
+            v-if="formMode === 'team'"
+            v-model:skills="teamSkills"
+            v-model:preferred-teammates="preferredTeammates"
+          />
+          <div v-else>
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
               희망 곡 및 세션
               <span class="font-normal text-slate-500">
@@ -239,7 +272,13 @@ import {
   useMemberSetlistLoader,
 } from "~/composables/useMemberSetlistLoader";
 import { useMemberFormApi } from "~/composables/useMemberFormApi";
+import {
+  buildMemberFormAvailabilities,
+  getScheduleWeekStart,
+} from "~/composables/useMemberFormPayload";
+import { TEAM_POSITIONS, createEmptyTeamSkills, type TeamSkills } from "~/utils/teamForm";
 
+type FormMode = "song" | "team";
 type Pick = {
   songId: string;
   sessions: string[];
@@ -248,6 +287,8 @@ type Pick = {
 const REQUIRED_MIN_ROLES = 6;
 const INITIAL_PICK_ROWS = 3;
 const LOCAL_SUBMISSION_KEY = "bandpick-member-submission-v1";
+const LOCAL_TEAM_SUBMISSION_KEY = "bandpick-team-submission-v1";
+const LOCAL_FORM_MODE_KEY = "bandpick-member-form-mode-v1";
 const PICK_LABELS = ["1st", "2nd", "3rd"];
 
 const days = ["월", "화", "수", "목", "금"];
@@ -257,10 +298,14 @@ const setlistError = ref("");
 const saveFeedback = ref("");
 const saveFeedbackType = ref<"error" | "success">("error");
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
-const { loadMemberSettings, submitMemberForm } = useMemberFormApi();
+const { loadMemberSettings, submitMemberForm, submitTeamForm } = useMemberFormApi();
+const { loadAuthUser } = useAuthApi();
 const settingsLoading = ref(true);
 const settingsError = ref("");
 const saving = ref(false);
+const formMode = ref<FormMode>("song");
+const preferredTeammates = ref("");
+const teamSkills = ref<TeamSkills>(createEmptyTeamSkills());
 
 function createEmptyPick(): Pick {
   return { songId: "", sessions: [] };
@@ -437,10 +482,34 @@ function validatePicksForSave(): string {
   return "";
 }
 
+function selectedTeamPositions() {
+  return TEAM_POSITIONS.filter((position) => teamSkills.value[position])
+    .map((position) => ({
+      position,
+      proficiency: teamSkills.value[position],
+    }));
+}
+
+function validateTeamFormForSave(): string {
+  if (!selectedTeamPositions().length) {
+    return "가능한 포지션을 하나 이상 선택하고 숙련도를 지정해 주세요.";
+  }
+  return "";
+}
+
 function saveSubmissionDraft(body: unknown) {
   if (!import.meta.client) return;
   try {
     localStorage.setItem(LOCAL_SUBMISSION_KEY, JSON.stringify(body));
+  } catch {
+    // ignore
+  }
+}
+
+function saveTeamSubmissionDraft(body: unknown) {
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(LOCAL_TEAM_SUBMISSION_KEY, JSON.stringify(body));
   } catch {
     // ignore
   }
@@ -474,6 +543,10 @@ async function handleSave() {
   if (isDeadlinePassed.value) {
     saveFeedbackType.value = "error";
     saveFeedback.value = "신청 마감 시간이 지나 제출할 수 없습니다.";
+    return;
+  }
+  if (formMode.value === "team") {
+    await handleTeamSave();
     return;
   }
   const validationError = validatePicksForSave();
@@ -515,6 +588,75 @@ async function handleSave() {
     saveFeedbackType.value = "error";
     saveFeedback.value =
       "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.";
+  } finally {
+    saving.value = false;
+  }
+}
+
+function extractSaveErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) return data;
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
+
+async function handleTeamSave() {
+  const validationError = validateTeamFormForSave();
+  if (validationError) {
+    saveFeedbackType.value = "error";
+    saveFeedback.value = validationError;
+    return;
+  }
+
+  const requestBody = {
+    positions: selectedTeamPositions(),
+    preferredTeammates: preferredTeammates.value.trim(),
+    availabilities: buildMemberFormAvailabilities(
+      selectedSlots.value,
+      timeSlots.value,
+      getScheduleWeekStart(new Date()),
+    ),
+    availableSlots: Array.from(selectedSlots.value).sort(),
+  };
+
+  saving.value = true;
+  try {
+    const user = loadAuthUser();
+    if (!user) {
+      saveTeamSubmissionDraft(requestBody);
+      saveFeedbackType.value = import.meta.dev ? "success" : "error";
+      saveFeedback.value = import.meta.dev
+        ? "로그인 정보가 없어 입력 내용을 브라우저에 임시 저장했습니다."
+        : "로그인 정보가 없습니다. 다시 로그인해 주세요.";
+      return;
+    }
+
+    const response = await submitTeamForm(user.id, {
+      positions: requestBody.positions,
+      preferredTeammates: requestBody.preferredTeammates,
+      availabilities: requestBody.availabilities,
+    });
+    saveFeedbackType.value = "success";
+    saveFeedback.value = response.message || "팀제 신청이 저장되었습니다.";
+  } catch (error) {
+    if (import.meta.dev && isSubmissionNetworkError(error)) {
+      saveTeamSubmissionDraft(requestBody);
+      saveFeedbackType.value = "success";
+      saveFeedback.value =
+        "백엔드 미연결 상태입니다. 입력 내용을 브라우저에 임시 저장했습니다.";
+      return;
+    }
+    saveFeedbackType.value = "error";
+    saveFeedback.value = extractSaveErrorMessage(
+      error,
+      "제출 중 오류가 발생했습니다. 네트워크와 서버 상태를 확인해 주세요.",
+    );
   } finally {
     saving.value = false;
   }
@@ -565,6 +707,17 @@ function resetSlots() {
 }
 
 onMounted(async () => {
+  if (import.meta.client) {
+    try {
+      const savedMode = localStorage.getItem(LOCAL_FORM_MODE_KEY);
+      if (savedMode === "song" || savedMode === "team") {
+        formMode.value = savedMode;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   settingsLoading.value = true;
   settingsError.value = "";
   try {
@@ -618,6 +771,16 @@ onBeforeUnmount(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
+watch(formMode, (mode) => {
+  saveFeedback.value = "";
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(LOCAL_FORM_MODE_KEY, mode);
+  } catch {
+    // ignore
+  }
+});
+
 watch(
   songs,
   () => {
@@ -627,6 +790,8 @@ watch(
 );
 
 useHead({
-  title: "BandPick 부원",
+  title: computed(() =>
+    formMode.value === "team" ? "BandPick 부원 · 팀제" : "BandPick 부원",
+  ),
 });
 </script>
