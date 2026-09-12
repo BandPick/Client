@@ -1,5 +1,5 @@
 export const TEAM_POSITIONS = ["V", "D", "B", "EG1", "EG2", "AG", "K"] as const;
-export const PROFICIENCY_LEVELS = ["상", "중", "하", "도전해보고싶음"] as const;
+export const PROFICIENCY_LEVELS = ["상", "중", "하"] as const;
 
 export type TeamPosition = (typeof TEAM_POSITIONS)[number];
 export type ProficiencyLevel = (typeof PROFICIENCY_LEVELS)[number];

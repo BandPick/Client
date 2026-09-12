@@ -31,18 +31,24 @@ export type MemberFormAvailabilityRequest = {
 
 export type TeamFormPositionRequest = {
   position: string;
-  proficiency: string;
+  level: string;
+};
+
+export type TeamFormScheduleRequest = {
+  dayOfWeek: string;
+  startTime: string;
 };
 
 export type TeamFormSaveRequest = {
+  teammates: string;
+  maxTeams: number;
   positions: TeamFormPositionRequest[];
-  preferredTeammates: string;
-  availabilities: MemberFormAvailabilityRequest[];
+  schedules: TeamFormScheduleRequest[];
 };
 
 export type TeamFormSaveResponse = {
   savedPositionCount: number;
-  savedAvailabilityCount: number;
+  savedScheduleCount: number;
   message?: string;
 };
 
