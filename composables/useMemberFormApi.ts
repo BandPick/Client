@@ -32,6 +32,7 @@ export type MemberFormAvailabilityRequest = {
 export type TeamFormPositionRequest = {
   position: string;
   level: string;
+  priority: number;
 };
 
 export type TeamFormScheduleRequest = {
@@ -40,7 +41,7 @@ export type TeamFormScheduleRequest = {
 };
 
 export type TeamFormSaveRequest = {
-  teammates: string;
+  message: string;
   maxTeams: number;
   positions: TeamFormPositionRequest[];
   schedules: TeamFormScheduleRequest[];
@@ -50,6 +51,46 @@ export type TeamFormSaveResponse = {
   savedPositionCount: number;
   savedScheduleCount: number;
   message?: string;
+};
+
+export type MemberFormSavePayload = {
+  picks: MemberFormPickRequest[];
+  availabilities: MemberFormAvailabilityRequest[];
+};
+
+export type MemberFormSaveResponse = {
+  savedPickCount: number;
+  savedAvailabilityCount: number;
+  message?: string;
+};
+
+export type MemberFormPickResponse = {
+  priority: number;
+  songTitle: string;
+  session: string;
+  setlistId: number;
+};
+
+export type MemberFormAvailabilityResponse = {
+  availableFrom: string;
+  availableTo: string;
+};
+
+export type MemberFormDetailResponse = {
+  userId: number;
+  picks: MemberFormPickResponse[];
+  availabilities: MemberFormAvailabilityResponse[];
+};
+
+export type TeamFormMemberResponse = {
+  userId: number;
+  name: string;
+  code: string;
+  message: string;
+  maxTeams: number;
+  createdAt: string;
+  positions: TeamFormPositionRequest[];
+  schedules: TeamFormScheduleRequest[];
 };
 
 function joinApiPath(base: string, pathWithoutPrefix: string): string {
@@ -105,16 +146,30 @@ export function useMemberFormApi() {
     }
   }
 
-  async function submitMemberForm(body: MemberSubmissionRequest) {
-    return await $fetch<MemberSubmissionResponse>(submissionUrl.value, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
+  function memberFormUrl(userId: number) {
+    return joinApiPath(config.public.apiBase, `users/${userId}/forms`);
   }
 
   function teamFormUrl(userId: number) {
     return joinApiPath(config.public.apiBase, `users/${userId}/team-forms`);
+  }
+
+  async function submitMemberForm(userId: number, body: MemberFormSavePayload) {
+    return await $fetch<MemberFormSaveResponse>(memberFormUrl(userId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: {
+        userId,
+        picks: body.picks,
+        availabilities: body.availabilities,
+      },
+    });
+  }
+
+  async function loadMemberForm(userId: number) {
+    return await $fetch<MemberFormDetailResponse>(memberFormUrl(userId), {
+      method: "GET",
+    });
   }
 
   async function submitTeamForm(userId: number, body: TeamFormSaveRequest) {
@@ -125,12 +180,31 @@ export function useMemberFormApi() {
     });
   }
 
+  async function loadTeamForm(userId: number) {
+    try {
+      return await $fetch<TeamFormMemberResponse>(teamFormUrl(userId), {
+        method: "GET",
+      });
+    } catch (error) {
+      const err = error as {
+        statusCode?: number;
+        status?: number;
+        response?: { status?: number };
+      };
+      const status = err.statusCode ?? err.status ?? err.response?.status;
+      if (status === 404) return null;
+      throw error;
+    }
+  }
+
   return {
     settingsUrl,
     submissionUrl,
     fetchSettings,
     loadMemberSettings,
     submitMemberForm,
+    loadMemberForm,
     submitTeamForm,
+    loadTeamForm,
   };
 }

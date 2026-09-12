@@ -39,7 +39,7 @@
       <div class="mt-6 grid gap-6 lg:mt-8 lg:gap-8 lg:grid-cols-[1fr_1.15fr]">
         <div class="min-w-0 space-y-5 sm:space-y-6">
           <MemberTeamFormFields v-if="formMode === 'team'" v-model:skills="teamSkills"
-            v-model:preferred-teammates="preferredTeammates" v-model:max-teams="maxTeams" />
+            v-model:priorities="teamPriorities" v-model:planner-message="plannerMessage" v-model:max-teams="maxTeams" />
           <div v-else>
             <p class="mb-3 text-base font-semibold text-slate-800 sm:text-lg">
               희망 곡 및 세션
@@ -173,21 +173,14 @@
               ? "저장 중..."
               : isDeadlinePassed
                 ? "신청 마감됨"
-                : "데이터 저장하기"
+                : "저장"
           }}
         </button>
       </div>
     </section>
 
-    <CommonAlertDialog
-      :open="alertOpen"
-      :type="alertType"
-      :title="alertTitle"
-      :message="alertMessage"
-      :action-label="alertActionLabel"
-      @close="alertOpen = false"
-      @confirm="onAlertConfirm"
-    />
+    <CommonAlertDialog :open="alertOpen" :type="alertType" :title="alertTitle" :message="alertMessage"
+      :action-label="alertActionLabel" @close="alertOpen = false" @confirm="onAlertConfirm" />
   </div>
 </template>
 
@@ -197,7 +190,22 @@ import {
   useMemberSetlistLoader,
 } from "~/composables/useMemberSetlistLoader";
 import { useMemberFormApi } from "~/composables/useMemberFormApi";
-import { TEAM_POSITIONS, createEmptyTeamSkills, type TeamSkills } from "~/utils/teamForm";
+import {
+  buildMemberFormAvailabilities,
+  buildMemberFormPicks,
+  getScheduleWeekStart,
+  groupPicksForForm,
+  slotsFromAvailabilities,
+  slotsFromTeamSchedules,
+} from "~/composables/useMemberFormPayload";
+import {
+  PROFICIENCY_LEVELS,
+  TEAM_POSITIONS,
+  createEmptyTeamPriorities,
+  createEmptyTeamSkills,
+  type TeamPriorities,
+  type TeamSkills,
+} from "~/utils/teamForm";
 
 type FormMode = "song" | "team";
 type Pick = {
@@ -223,15 +231,18 @@ const alertMessage = ref("");
 const alertActionLabel = ref("확인");
 const goHomeOnConfirm = ref(false);
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
-const { loadMemberSettings, submitMemberForm, submitTeamForm } = useMemberFormApi();
+const { loadMemberSettings, submitMemberForm, submitTeamForm, loadMemberForm, loadTeamForm } = useMemberFormApi();
 const { loadAuthUser } = useAuthApi();
 const settingsLoading = ref(true);
 const settingsError = ref("");
 const saving = ref(false);
 const formMode = ref<FormMode>("song");
-const preferredTeammates = ref("");
+const plannerMessage = ref("");
 const maxTeams = ref(1);
 const teamSkills = ref<TeamSkills>(createEmptyTeamSkills());
+const teamPriorities = ref<TeamPriorities>(createEmptyTeamPriorities());
+const songSlots = ref<Set<string>>(new Set());
+const teamSlots = ref<Set<string>>(new Set());
 
 function createEmptyPick(): Pick {
   return { songId: "", sessions: [] };
@@ -418,9 +429,10 @@ function validatePicksForSave(): string {
 function selectedTeamPositions() {
   return TEAM_POSITIONS.flatMap((position) => {
     const level = teamSkills.value[position];
-    if (!level) return [];
-    return [{ position, level }];
-  });
+    const priority = teamPriorities.value[position];
+    if (!level || !priority) return [];
+    return [{ position, level, priority }];
+  }).sort((a, b) => a.priority - b.priority);
 }
 
 function selectedTeamSchedules() {
@@ -441,8 +453,16 @@ function selectedTeamSchedules() {
 }
 
 function validateTeamFormForSave(): string {
-  if (!selectedTeamPositions().length) {
+  const selected = TEAM_POSITIONS.filter((position) => Boolean(teamSkills.value[position]));
+  if (!selected.length) {
     return "가능한 포지션을 하나 이상 선택하고 숙련도를 지정해 주세요.";
+  }
+  if (selected.some((position) => !teamPriorities.value[position])) {
+    return "선택한 포지션의 희망 순위를 모두 지정해 주세요.";
+  }
+  const ranks = selected.map((position) => teamPriorities.value[position]);
+  if (new Set(ranks).size !== ranks.length) {
+    return "포지션 희망 순위는 겹치지 않게 선택해 주세요.";
   }
   if (maxTeams.value < 1 || maxTeams.value > 3) {
     return "참여 가능 팀 수는 1팀부터 3팀까지 선택할 수 있습니다.";
@@ -539,19 +559,40 @@ async function handleSave() {
     availableSlots: Array.from(selectedSlots.value).sort(),
   };
 
-  saving.value = true;
-  try {
-    const response = await submitMemberForm(requestBody);
-    if (response.success) {
+  const user = loadAuthUser();
+  if (!user) {
+    saveSubmissionDraft(requestBody);
+    if (import.meta.dev) {
       showAlert(
         "success",
-        response.message || "제출 되었습니다.",
-        "완료",
-        { actionLabel: "메인 화면으로", goHomeOnConfirm: true },
+        "로그인 정보가 없어 입력 내용을 브라우저에 임시 저장했습니다.",
+        "임시 저장",
       );
-      return;
+    } else {
+      showAlert("error", "로그인 정보가 없습니다. 다시 로그인해 주세요.", "저장 실패");
     }
-    showAlert("error", response.message || "제출에 실패했습니다.", "저장 실패");
+    return;
+  }
+
+  const payload = {
+    picks: buildMemberFormPicks(form.picks),
+    availabilities: buildMemberFormAvailabilities(
+      selectedSlots.value,
+      timeSlots.value,
+      getScheduleWeekStart(new Date()),
+    ),
+  };
+
+  saving.value = true;
+  try {
+    const response = await submitMemberForm(user.id, payload);
+    songSlots.value = new Set(selectedSlots.value);
+    showAlert(
+      "success",
+      response.message || "제출 되었습니다.",
+      "완료",
+      { actionLabel: "메인 화면으로", goHomeOnConfirm: true },
+    );
   } catch (error) {
     if (import.meta.dev && isSubmissionNetworkError(error)) {
       saveSubmissionDraft(requestBody);
@@ -593,7 +634,7 @@ async function handleTeamSave() {
   }
 
   const requestBody = {
-    teammates: preferredTeammates.value.trim(),
+    message: plannerMessage.value.trim(),
     maxTeams: maxTeams.value,
     positions: selectedTeamPositions(),
     schedules: selectedTeamSchedules(),
@@ -617,6 +658,7 @@ async function handleTeamSave() {
     }
 
     const response = await submitTeamForm(user.id, requestBody);
+    teamSlots.value = new Set(selectedSlots.value);
     showAlert(
       "success",
       response.message || "제출되었습니다.",
@@ -688,6 +730,163 @@ function finishDrag() {
 
 function resetSlots() {
   selectedSlots.value = new Set();
+  if (formMode.value === "team") {
+    teamSlots.value = new Set();
+  } else {
+    songSlots.value = new Set();
+  }
+}
+
+function replacePicks(nextPicks: Pick[]) {
+  form.picks.splice(0, form.picks.length, ...nextPicks);
+  form.picks.forEach((_, index) => syncPickSessions(index));
+  pruneDuplicatePairs();
+}
+
+function applySongForm(
+  picks: { songId: string; sessions: string[] }[],
+  slots: string[],
+) {
+  if (picks.length) {
+    replacePicks(picks.map((pick) => ({
+      songId: pick.songId,
+      sessions: [...pick.sessions],
+    })));
+  }
+  songSlots.value = new Set(slots);
+}
+
+function applyTeamForm(payload: {
+  message?: string;
+  teammates?: string;
+  maxTeams: number;
+  positions: { position: string; level: string; priority?: number }[];
+  schedules: { dayOfWeek: string; startTime: string }[];
+}) {
+  plannerMessage.value = payload.message ?? payload.teammates ?? "";
+  maxTeams.value =
+    payload.maxTeams >= 1 && payload.maxTeams <= 3 ? payload.maxTeams : 1;
+
+  const nextSkills = createEmptyTeamSkills();
+  const nextPriorities = createEmptyTeamPriorities();
+  const ordered = [...(payload.positions ?? [])].sort((a, b) => {
+    const aRank = a.priority && a.priority > 0 ? a.priority : 999;
+    const bRank = b.priority && b.priority > 0 ? b.priority : 999;
+    if (aRank !== bRank) return aRank - bRank;
+    return TEAM_POSITIONS.indexOf(a.position as typeof TEAM_POSITIONS[number])
+      - TEAM_POSITIONS.indexOf(b.position as typeof TEAM_POSITIONS[number]);
+  });
+
+  ordered.forEach((item, index) => {
+    const position = TEAM_POSITIONS.find((value) => value === item.position);
+    const level = PROFICIENCY_LEVELS.find((value) => value === item.level);
+    if (!position || !level) return;
+    nextSkills[position] = level;
+    nextPriorities[position] =
+      item.priority && item.priority > 0 ? item.priority : index + 1;
+  });
+  TEAM_POSITIONS.filter((position) => nextSkills[position])
+    .sort((a, b) => {
+      const aRank = nextPriorities[a] ?? 999;
+      const bRank = nextPriorities[b] ?? 999;
+      return aRank - bRank;
+    })
+    .forEach((position, index) => {
+      nextPriorities[position] = index + 1;
+    });
+  teamSkills.value = nextSkills;
+  teamPriorities.value = nextPriorities;
+  teamSlots.value = new Set(
+    slotsFromTeamSchedules(payload.schedules ?? [], timeSlots.value),
+  );
+}
+
+async function restoreSavedForms() {
+  const user = loadAuthUser();
+  let hasSongForm = false;
+  let hasTeamForm = false;
+
+  if (user) {
+    try {
+      const songForm = await loadMemberForm(user.id);
+      if (songForm && (songForm.picks?.length || songForm.availabilities?.length)) {
+        hasSongForm = true;
+        applySongForm(
+          groupPicksForForm(songForm.picks ?? [], INITIAL_PICK_ROWS),
+          slotsFromAvailabilities(songForm.availabilities ?? [], timeSlots.value),
+        );
+      }
+    } catch {
+      // 일반 폼을 못 불러오면 로컬 임시저장으로 복원
+    }
+
+    try {
+      const teamForm = await loadTeamForm(user.id);
+      if (teamForm) {
+        hasTeamForm = true;
+        applyTeamForm(teamForm);
+      }
+    } catch {
+      // 팀제 폼을 못 불러오면 로컬 임시저장으로 복원
+    }
+  }
+
+  if (!import.meta.client) {
+    selectedSlots.value = new Set(
+      formMode.value === "team" ? teamSlots.value : songSlots.value,
+    );
+    return;
+  }
+
+  if (!hasSongForm) {
+    try {
+      const raw = localStorage.getItem(LOCAL_SUBMISSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          picks?: { songId?: number | string; sessions?: string[] }[];
+          availableSlots?: string[];
+        };
+        applySongForm(
+          (parsed.picks ?? []).map((pick) => ({
+            songId: String(pick.songId ?? ""),
+            sessions: pick.sessions ?? [],
+          })),
+          parsed.availableSlots ?? [],
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!hasTeamForm) {
+    try {
+      const raw = localStorage.getItem(LOCAL_TEAM_SUBMISSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          message?: string;
+          teammates?: string;
+          maxTeams?: number;
+          positions?: { position: string; level: string; priority?: number }[];
+          schedules?: { dayOfWeek: string; startTime: string }[];
+        };
+        if ((parsed.positions?.length ?? 0) > 0 || (parsed.schedules?.length ?? 0) > 0) {
+          applyTeamForm({
+            message: parsed.message ?? parsed.teammates ?? "",
+            maxTeams: parsed.maxTeams ?? 1,
+            positions: parsed.positions ?? [],
+            schedules: parsed.schedules ?? [],
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  selectedSlots.value = new Set(
+    formMode.value === "team" ? teamSlots.value : songSlots.value,
+  );
 }
 
 onMounted(async () => {
@@ -744,6 +943,8 @@ onMounted(async () => {
     setlistLoading.value = false;
   }
 
+  await restoreSavedForms();
+
   window.addEventListener("mouseup", finishDrag);
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
@@ -755,9 +956,14 @@ onBeforeUnmount(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
-watch(formMode, (mode) => {
+watch(formMode, (mode, prev) => {
   alertOpen.value = false;
   goHomeOnConfirm.value = false;
+  if (prev) {
+    if (prev === "song") songSlots.value = new Set(selectedSlots.value);
+    if (prev === "team") teamSlots.value = new Set(selectedSlots.value);
+    selectedSlots.value = new Set(mode === "team" ? teamSlots.value : songSlots.value);
+  }
   if (!import.meta.client) return;
   try {
     localStorage.setItem(LOCAL_FORM_MODE_KEY, mode);
