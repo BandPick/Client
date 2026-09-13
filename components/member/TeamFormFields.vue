@@ -43,7 +43,8 @@
         참여 가능 팀 수
       </p>
       <p class="mb-3 text-xs text-slate-500">
-        최소 1팀부터 최대 3팀까지 선택할 수 있습니다.
+        스케줄과 세션 밸런스를 고려한 원활한 배정을 위해, 희망하는 팀 수가 아닌 '최대' 소화 가능한 팀 수를 선택해 주세요.
+        각 팀은 주 2회, 1회 70분씩 총 주 140분 연습을 진행합니다.
       </p>
       <div class="flex flex-wrap gap-2">
         <button v-for="count in TEAM_COUNT_OPTIONS" :key="count" type="button"
