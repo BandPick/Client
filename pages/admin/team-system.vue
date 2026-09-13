@@ -215,18 +215,18 @@
       <!-- 테이블 -->
       <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[760px] border-collapse text-sm">
+          <table class="w-full min-w-[860px] border-collapse text-sm">
             <thead class="bg-slate-50">
               <tr>
                 <!-- 이름 -->
                 <th
-                  class="w-30 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  class="w-36 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
                   이름
                 </th>
 
                 <!-- 제출 현황 -->
                 <th
-                  class="w-30 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  class="w-32 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
                   제출 현황
                 </th>
 
@@ -238,13 +238,19 @@
 
                 <!-- 참여 팀 수 -->
                 <th
-                  class="w-40 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
-                  참여 가능한 팀 수
+                  class="w-24 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  참여 팀
+                </th>
+
+                <!-- 스케줄 -->
+                <th
+                  class="w-20 border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  스케줄
                 </th>
 
                 <!-- 기획자에게 하고 싶은 말 -->
                 <th
-                  class="min-w-[220px] border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
+                  class="min-w-[300px] border-b border-slate-200 px-5 py-3.5 text-left text-xs font-semibold tracking-wide text-slate-500">
                   기획자에게
                 </th>
               </tr>
@@ -253,14 +259,14 @@
             <tbody class="divide-y divide-slate-100">
               <!-- 로딩 -->
               <tr v-if="isLoading">
-                <td colspan="5" class="px-5 py-12 text-center text-sm text-slate-400">
+                <td colspan="6" class="px-5 py-12 text-center text-sm text-slate-400">
                   제출 현황을 불러오는 중...
                 </td>
               </tr>
 
               <!-- 검색 결과 없음 -->
               <tr v-else-if="!filteredRows.length">
-                <td colspan="5" class="px-5 py-12 text-center">
+                <td colspan="6" class="px-5 py-12 text-center">
                   <p class="text-sm font-medium text-slate-500">
                     표시할 부원이 없습니다.
                   </p>
@@ -286,7 +292,7 @@
                     class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
                     <span class="h-1.5 w-1.5 rounded-full bg-emerald-500" />
 
-                    제출 완료
+                    완료
                   </span>
 
                   <span v-else
@@ -299,10 +305,7 @@
 
                 <!-- 가능 포지션 -->
                 <td class="px-5 py-4 align-middle">
-                  <div v-if="
-                    row.submitted &&
-                    row.positions.length
-                  " class="flex flex-wrap gap-1.5">
+                  <div v-if="row.submitted && row.positions.length" class="flex flex-wrap gap-1.5">
                     <span v-for="position in row.positions" :key="position"
                       class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
                       {{ position }}
@@ -319,6 +322,24 @@
                   <span v-if="row.submitted" class="text-sm text-slate-700">
                     {{ row.maxTeams }}팀
                   </span>
+
+                  <span v-else class="text-xs text-slate-400">
+                    -
+                  </span>
+                </td>
+
+                <!-- 스케줄 -->
+                <td class="px-5 py-4 align-middle">
+                  <button v-if="row.submitted && row.schedules.length" type="button"
+                    class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                    @click="openSchedule(row)">
+                    보기
+                  </button>
+
+                  <span v-else-if="row.submitted" class="text-xs text-slate-400">
+                    미선택
+                  </span>
+
                   <span v-else class="text-xs text-slate-400">
                     -
                   </span>
@@ -329,6 +350,7 @@
                   <p v-if="row.submitted && row.message" class="max-w-xs whitespace-pre-wrap text-sm text-slate-700">
                     {{ row.message }}
                   </p>
+
                   <span v-else class="text-xs text-slate-400">
                     -
                   </span>
@@ -339,6 +361,9 @@
         </div>
       </div>
     </section>
+
+    <AdminMemberScheduleDialog :open="scheduleDialogOpen" :member-name="scheduleDialogName"
+      :schedules="scheduleDialogSlots" @close="scheduleDialogOpen = false" />
   </div>
 </template>
 
@@ -389,7 +414,10 @@ type SubmissionRow = {
   positions: string[];
   message: string;
   maxTeams: number;
-  scheduleCount: number;
+  schedules: {
+    dayOfWeek: string;
+    startTime: string;
+  }[];
 };
 
 /* =========================================================
@@ -483,6 +511,15 @@ const unassignedPool =
 const knownPeople = ref<Map<number, Occupant>>(new Map());
 
 const isDirty = ref(false);
+
+const scheduleDialogOpen = ref(false);
+const scheduleDialogName = ref("");
+const scheduleDialogSlots = ref<
+  {
+    dayOfWeek: string;
+    startTime: string;
+  }[]
+>([]);
 
 /* =========================================================
  * API URL
@@ -628,8 +665,7 @@ function buildRows(
 
         maxTeams: form?.maxTeams ?? 1,
 
-        scheduleCount:
-          form?.schedules?.length ?? 0,
+        schedules: form?.schedules ?? [],
       };
     })
 
@@ -650,6 +686,12 @@ function buildRows(
         "ko"
       );
     });
+}
+
+function openSchedule(row: SubmissionRow) {
+  scheduleDialogName.value = row.name;
+  scheduleDialogSlots.value = row.schedules;
+  scheduleDialogOpen.value = true;
 }
 
 /* =========================================================
