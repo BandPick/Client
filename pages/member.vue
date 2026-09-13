@@ -120,6 +120,9 @@
           <p class="mb-2 text-base font-semibold text-slate-800 sm:text-lg">
             합주 가능 시간대 선택
           </p>
+          <p class="mb-2 text-xs text-slate-500">
+            같은 요일에서 위아래로 밀면 연속 선택할 수 있어요. 화면을 스크롤하려면 왼쪽 시간 칸을 밀어주세요.
+          </p>
           <div class="w-full overflow-hidden rounded-2xl border border-slate-300">
             <div class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]">
               <div
@@ -139,11 +142,12 @@
                   {{ timeIndex % 2 === 0 ? time : "" }}
                 </div>
                 <button v-for="day in days" :key="`${day}-${time}`" type="button"
-                  class="box-border h-9 border-b border-r border-slate-300 transition-colors" :class="[
+                  :data-day="day" :data-time="time"
+                  class="box-border h-9 touch-none select-none border-b border-r border-slate-300 transition-colors" :class="[
                     isSelectedSlot(day, time)
                       ? 'bg-blue-100 hover:bg-blue-200'
                       : 'bg-white hover:bg-slate-50',
-                  ]" @mousedown.prevent="startDrag(day, time)" @mouseenter="handleDragEnter(day, time)" />
+                  ]" @pointerdown.prevent="startDrag(day, time)" />
               </template>
             </div>
           </div>
@@ -255,8 +259,8 @@ const form = reactive({
 const selectedSlots = ref<Set<string>>(new Set());
 const isDragging = ref(false);
 const dragDay = ref<string | null>(null);
+const dragTime = ref<string | null>(null);
 const dragMode = ref<"select" | "deselect">("select");
-const movedWhileDragging = ref(false);
 const deadlineAt = ref<Date | null>(null);
 const nowMs = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -707,25 +711,65 @@ function setSlot(day: string, time: string, selected: boolean) {
   selectedSlots.value = next;
 }
 
+function paintSlots(day: string, fromTime: string, toTime: string) {
+  const times = timeSlots.value;
+  const fromIndex = times.indexOf(fromTime);
+  const toIndex = times.indexOf(toTime);
+  if (fromIndex < 0 || toIndex < 0) {
+    setSlot(day, toTime, dragMode.value === "select");
+    return;
+  }
+
+  const start = Math.min(fromIndex, toIndex);
+  const end = Math.max(fromIndex, toIndex);
+  const selected = dragMode.value === "select";
+  const next = new Set(selectedSlots.value);
+  for (let index = start; index <= end; index += 1) {
+    const time = times[index];
+    if (!time) continue;
+    const key = slotKey(day, time);
+    if (selected) next.add(key);
+    else next.delete(key);
+  }
+  selectedSlots.value = next;
+}
+
 function startDrag(day: string, time: string) {
   isDragging.value = true;
-  movedWhileDragging.value = false;
   dragDay.value = day;
+  dragTime.value = time;
   dragMode.value = isSelectedSlot(day, time) ? "deselect" : "select";
   setSlot(day, time, dragMode.value === "select");
 }
 
-function handleDragEnter(day: string, time: string) {
-  if (!isDragging.value || dragDay.value !== day) return;
-  movedWhileDragging.value = true;
-  setSlot(day, time, dragMode.value === "select");
+function applyDragAt(clientX: number, clientY: number) {
+  if (!isDragging.value || dragDay.value == null || dragTime.value == null) return;
+
+  const target = document.elementFromPoint(clientX, clientY);
+  const cell =
+    target instanceof Element
+      ? target.closest<HTMLElement>("[data-day][data-time]")
+      : null;
+  if (!cell) return;
+
+  const day = cell.dataset.day;
+  const time = cell.dataset.time;
+  if (!day || !time || day !== dragDay.value) return;
+
+  paintSlots(day, dragTime.value, time);
+  dragTime.value = time;
+}
+
+function handlePointerMove(event: PointerEvent) {
+  if (!isDragging.value) return;
+  applyDragAt(event.clientX, event.clientY);
 }
 
 function finishDrag() {
   if (!isDragging.value) return;
   isDragging.value = false;
-  movedWhileDragging.value = false;
   dragDay.value = null;
+  dragTime.value = null;
 }
 
 function resetSlots() {
@@ -945,14 +989,18 @@ onMounted(async () => {
 
   await restoreSavedForms();
 
-  window.addEventListener("mouseup", finishDrag);
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", finishDrag);
+  window.addEventListener("pointercancel", finishDrag);
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 1000);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("mouseup", finishDrag);
+  window.removeEventListener("pointermove", handlePointerMove);
+  window.removeEventListener("pointerup", finishDrag);
+  window.removeEventListener("pointercancel", finishDrag);
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
