@@ -129,7 +129,7 @@
                 </span>
               </div>
 
-              <p v-if="team.note" class="mt-1 text-xs text-slate-500">
+              <p v-if="team.note" class="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-500">
                 {{ team.note }}
               </p>
 
@@ -430,6 +430,8 @@
 </template>
 
 <script setup lang="ts">
+import { groupTeamScheduleRanges } from "~/utils/teamForm";
+
 definePageMeta({
   layout: "admin",
 });
@@ -1126,6 +1128,59 @@ function refreshBoardStatus(teamIndex: number) {
   const hasMember = team.slots.some((slot) => slot.occupant);
   const complete = team.slots.every((slot) => !slot.needed || slot.occupant);
   team.status = hasMember && complete ? "완료" : "대기";
+  team.note = team.status === "완료" ? formatRehearsalTimes(team) : "";
+}
+
+function formatRehearsalTimes(team: Board) {
+  const groups = groupTeamScheduleRanges(commonTeamSchedules(team));
+  if (!groups.length) {
+    return "공통 가능 시간 없음";
+  }
+  return groups
+    .map((group) => `${group.day} ${group.ranges.join(", ")}`)
+    .join("\n");
+}
+
+function commonTeamSchedules(team: Board) {
+  const userIds = [
+    ...new Set(
+      team.slots
+        .map((slot) => slot.occupant?.userId)
+        .filter((userId): userId is number => userId != null),
+    ),
+  ];
+  if (!userIds.length) {
+    return [];
+  }
+
+  let common: Set<string> | null = null;
+  for (const userId of userIds) {
+    const row = rows.value.find((item) => item.userId === userId);
+    const keys = new Set(
+      (row?.schedules ?? [])
+        .map((item) => {
+          const day = String(item.dayOfWeek ?? "").trim();
+          const time = String(item.startTime ?? "").trim().slice(0, 5);
+          return day && time ? `${day}-${time}` : "";
+        })
+        .filter(Boolean),
+    );
+    if (common == null) {
+      common = keys;
+    } else {
+      common = new Set([...common].filter((key) => keys.has(key)));
+    }
+  }
+
+  return [...(common ?? [])]
+    .filter((key) => key.includes("-"))
+    .map((key) => {
+      const split = key.indexOf("-");
+      return {
+        dayOfWeek: key.slice(0, split),
+        startTime: key.slice(split + 1),
+      };
+    });
 }
 
 function rememberPerson(person: {
