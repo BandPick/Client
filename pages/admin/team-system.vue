@@ -136,8 +136,7 @@
               <!-- 포지션 슬롯 -->
               <div class="mt-3 space-y-1.5">
                 <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
-                  class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition"
-                  :class="{
+                  class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition" :class="{
                     'border-blue-400 bg-blue-50':
                       dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
                     'border-slate-100 bg-slate-50':
@@ -153,27 +152,26 @@
                     " @dragleave="
                       onSlotDragLeave(teamBoardIndex(pageIndex, indexInPage), slotIndex)
                       " @drop="
-                      onDropToSlot(
-                        $event,
-                        teamBoardIndex(pageIndex, indexInPage),
-                        slotIndex
-                      )
-                      ">
+                        onDropToSlot(
+                          $event,
+                          teamBoardIndex(pageIndex, indexInPage),
+                          slotIndex
+                        )
+                        ">
                   <!-- 포지션 -->
-                  <span
-                    class="w-12 shrink-0 rounded px-2 py-1 text-center text-xs font-semibold"
-                    :class="!slot.needed && !slot.occupant
-                      ? 'bg-slate-50 text-slate-300'
-                      : 'bg-slate-100 text-slate-500'">
+                  <span class="w-12 shrink-0 rounded px-2 py-1 text-center text-xs font-semibold" :class="!slot.needed && !slot.occupant
+                    ? 'bg-slate-50 text-slate-300'
+                    : 'bg-slate-100 text-slate-500'">
                     {{ slot.position }}
                   </span>
 
                   <!-- 배정된 사람 -->
                   <span v-if="slot.occupant"
                     class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                    <span draggable="true" class="min-w-0 flex-1 cursor-grab whitespace-nowrap select-none active:cursor-grabbing" :class="{
-                      'opacity-30': draggingUserId === slot.occupant.userId,
-                    }" @dragstart="
+                    <span draggable="true"
+                      class="min-w-0 flex-1 cursor-grab whitespace-nowrap select-none active:cursor-grabbing" :class="{
+                        'opacity-30': draggingUserId === slot.occupant.userId,
+                      }" @dragstart="
                       onDragStart(
                         $event,
                         {
@@ -186,7 +184,7 @@
                       " @dragend="onDragEnd">
                       {{ slot.occupant.name }}
                       <span class="ml-1.5 text-xs text-slate-600">
-                        {{ slot.occupant.level }}
+                        {{ levelForPosition(slot.occupant.userId, slot.position) }}
                       </span>
                     </span>
 
@@ -210,13 +208,11 @@
                     배정 필요
                   </span>
 
-                  <button type="button"
-                    class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition"
+                  <button type="button" class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition"
                     :class="slot.needed
                       ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                       : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
-                    :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'"
-                    @mousedown.stop
+                    :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'" @mousedown.stop
                     @click.stop="setSlotNeeded(teamBoardIndex(pageIndex, indexInPage), slotIndex, !slot.needed)">
                     {{ slot.needed ? "필요없음" : "필요" }}
                   </button>
@@ -426,6 +422,9 @@
 
     <AdminMemberScheduleDialog :open="scheduleDialogOpen" :member-name="scheduleDialogName"
       :schedules="scheduleDialogSlots" @close="scheduleDialogOpen = false" />
+
+    <CommonAlertDialog :open="alertOpen" type="error" :title="alertTitle" :message="alertMessage"
+      @close="alertOpen = false" @confirm="alertOpen = false" />
   </div>
 </template>
 
@@ -476,6 +475,7 @@ type SubmissionRow = {
   name: string;
   submitted: boolean;
   positions: string[];
+  positionLevels: Record<string, string>;
   message: string;
   maxTeams: number;
   schedules: {
@@ -523,7 +523,6 @@ const POSITION_LIST = [
   "B",
   "EG1",
   "EG2",
-  "AG",
   "K",
 ] as const;
 
@@ -628,6 +627,10 @@ const scheduleDialogSlots = ref<
     startTime: string;
   }[]
 >([]);
+
+const alertOpen = ref(false);
+const alertTitle = ref("");
+const alertMessage = ref("");
 
 /* =========================================================
  * API URL
@@ -768,6 +771,13 @@ function buildRows(
                 : `${item.position}(${item.level})`,
             ),
 
+        positionLevels: Object.fromEntries(
+          (form?.positions ?? []).map((item) => [
+            item.position,
+            (item.level ?? "").trim() || "-",
+          ]),
+        ),
+
         message:
           (form?.message ?? form?.teammates ?? "").trim(),
 
@@ -838,14 +848,7 @@ function buildBoardsFromMatchResult(
                 position,
 
                 occupant: member
-                  ? {
-                    userId:
-                      member.userId,
-                    name:
-                      member.name,
-                    level:
-                      member.level,
-                  }
+                  ? occupantForSlot(member, position)
                   : null,
 
                 needed: Boolean(member) || !OPTIONAL_POSITIONS.has(position),
@@ -1046,9 +1049,18 @@ function onDropToSlot(
     return;
   }
 
-  targetSlot.occupant = payload.occupant;
+  if (
+    !isAssignedToTeam(payload.occupant.userId, teamIndex) &&
+    assignedTeamCount(payload.occupant.userId) >= maxTeamsFor(payload.occupant.userId)
+  ) {
+    showMaxTeamAlert(payload.occupant.name, maxTeamsFor(payload.occupant.userId));
+    dragPayload.value = null;
+    return;
+  }
+
+  targetSlot.occupant = occupantForSlot(payload.occupant, targetSlot.position);
   targetSlot.needed = true;
-  rememberPerson(payload.occupant);
+  rememberPerson(targetSlot.occupant);
 
   if (payload.origin.origin === "pool") {
     removeFromPool(payload.occupant.userId);
@@ -1118,6 +1130,23 @@ function setSlotNeeded(teamIndex: number, slotIndex: number, needed: boolean) {
   syncPool();
   refreshBoardStatus(teamIndex);
   isDirty.value = true;
+}
+
+function levelForPosition(userId: number, position: string) {
+  const row = rows.value.find((item) => item.userId === userId);
+  const level = row?.positionLevels?.[position];
+  return level && level.trim() ? level : "-";
+}
+
+function occupantForSlot(
+  person: { userId: number; name: string },
+  position: string,
+): Occupant {
+  return {
+    userId: person.userId,
+    name: person.name,
+    level: levelForPosition(person.userId, position),
+  };
 }
 
 function refreshBoardStatus(teamIndex: number) {
@@ -1202,6 +1231,31 @@ function hasAnyAssignment(userId: number) {
   return boards.value.some((team) =>
     team.slots.some((slot) => slot.occupant?.userId === userId),
   );
+}
+
+function isAssignedToTeam(userId: number, teamIndex: number) {
+  return boards.value[teamIndex]?.slots.some(
+    (slot) => slot.occupant?.userId === userId,
+  ) ?? false;
+}
+
+function assignedTeamCount(userId: number) {
+  return boards.value.filter((team) =>
+    team.slots.some((slot) => slot.occupant?.userId === userId),
+  ).length;
+}
+
+function maxTeamsFor(userId: number) {
+  const row = rows.value.find((item) => item.userId === userId);
+  const max = row?.maxTeams ?? 1;
+  return Math.max(1, Math.min(3, max));
+}
+
+function showMaxTeamAlert(name: string, maxTeams: number) {
+  alertTitle.value = "최대 참여 팀";
+  alertMessage.value =
+    `${name} 님은 이미 최대 참여 팀 수(${maxTeams}팀)에 들어가 있어 다른 팀에 배정할 수 없습니다.`;
+  alertOpen.value = true;
 }
 
 function syncPool() {
