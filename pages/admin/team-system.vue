@@ -84,85 +84,147 @@
         </div>
       </div>
 
-      <!-- 팀 카드 -->
-      <div v-if="boards.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <article v-for="(team, teamIndex) in boards" :key="team.name"
-          class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <!-- 팀 헤더 -->
-          <div class="flex items-center justify-between gap-2">
-            <h3 class="font-semibold text-slate-900">
+      <!-- 팀 카드: PC 3개 / 모바일 1개씩 넘김 -->
+      <div v-if="boards.length">
+        <div class="mb-3 flex items-center gap-2">
+          <button type="button"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="boardPageIndex <= 0" aria-label="이전 팀" @click="goToPage(boardPageIndex - 1)">
+            ‹
+          </button>
+
+          <div class="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-1">
+            <button v-for="(team, teamIndex) in boards" :key="`page-${team.name}`" type="button"
+              class="rounded-full px-3 py-1.5 text-xs font-semibold transition" :class="isTeamOnCurrentPage(teamIndex)
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" @click="goToTeam(teamIndex)">
               {{ team.name }}
-            </h3>
-
-            <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-              {{ team.status }}
-            </span>
+            </button>
           </div>
 
-          <p v-if="team.note" class="mt-1 text-xs text-slate-500">
-            {{ team.note }}
-          </p>
+          <button type="button"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="boardPageIndex >= boardPageCount - 1" aria-label="다음 팀" @click="goToPage(boardPageIndex + 1)">
+            ›
+          </button>
+        </div>
 
-          <!-- 포지션 슬롯 -->
-          <div class="mt-3 space-y-1.5">
-            <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
-              class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 transition" :class="{
-                'border-blue-400 bg-blue-50':
-                  dropTarget === `${teamIndex}-${slotIndex}`,
-              }" @dragover.prevent="
-                dropTarget = `${teamIndex}-${slotIndex}`
-                " @dragleave="
-                  onSlotDragLeave(teamIndex, slotIndex)
-                  " @drop="
-                    onDropToSlot(
-                      $event,
-                      teamIndex,
-                      slotIndex
-                    )
-                    ">
-              <!-- 포지션 -->
-              <span
-                class="w-12 shrink-0 rounded bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-500">
-                {{ slot.position }}
-              </span>
+        <div ref="boardScroller"
+          class="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          tabindex="0" @scroll.passive="onBoardScroll" @keydown="onBoardKeydown">
+          <div v-for="(page, pageIndex) in boardPages" :key="`board-page-${pageIndex}`"
+            class="flex shrink-0 snap-start gap-4" :style="{ flex: '0 0 100%' }">
+            <article v-for="(team, indexInPage) in page" :key="team.name"
+              class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" :style="boardCardStyle">
+              <!-- 팀 헤더 -->
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="font-semibold text-slate-900">
+                  {{ team.name }}
+                </h3>
 
-              <!-- 배정된 사람 -->
-              <span v-if="slot.occupant"
-                class="flex flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                <span draggable="true" class="flex-1 cursor-grab select-none active:cursor-grabbing" :class="{
-                  'opacity-30': draggingUserId === slot.occupant.userId,
-                }" @dragstart="
-                  onDragStart(
-                    $event,
-                    {
-                      origin: 'slot',
-                      teamIndex,
-                      slotIndex,
-                    },
-                    slot.occupant
-                  )
-                  " @dragend="onDragEnd">
-                  {{ slot.occupant.name }}
-                  <span class="ml-1.5 text-xs text-slate-600">
-                    {{ slot.occupant.level }}
-                  </span>
+                <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium" :class="team.status === '완료'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-600'">
+                  {{ team.status }}
                 </span>
+              </div>
 
-                <button type="button"
-                  class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
-                  title="배정 해제" @mousedown.stop @click.stop="unassign(teamIndex, slotIndex)">
-                  ✕
-                </button>
-              </span>
+              <p v-if="team.note" class="mt-1 text-xs text-slate-500">
+                {{ team.note }}
+              </p>
 
-              <!-- 빈 슬롯 -->
-              <span v-else
-                class="flex flex-1 rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-center text-xs text-slate-400">
-                배정 필요
-              </span>
-            </div>
+              <!-- 포지션 슬롯 -->
+              <div class="mt-3 space-y-1.5">
+                <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
+                  class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition"
+                  :class="{
+                    'border-blue-400 bg-blue-50':
+                      dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                    'border-slate-100 bg-slate-50':
+                      !slot.needed &&
+                      !slot.occupant &&
+                      dropTarget !== `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                    'border-slate-200':
+                      slot.needed ||
+                      slot.occupant ||
+                      dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                  }" @dragover.prevent="
+                    dropTarget = `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`
+                    " @dragleave="
+                      onSlotDragLeave(teamBoardIndex(pageIndex, indexInPage), slotIndex)
+                      " @drop="
+                      onDropToSlot(
+                        $event,
+                        teamBoardIndex(pageIndex, indexInPage),
+                        slotIndex
+                      )
+                      ">
+                  <!-- 포지션 -->
+                  <span
+                    class="w-12 shrink-0 rounded px-2 py-1 text-center text-xs font-semibold"
+                    :class="!slot.needed && !slot.occupant
+                      ? 'bg-slate-50 text-slate-300'
+                      : 'bg-slate-100 text-slate-500'">
+                    {{ slot.position }}
+                  </span>
+
+                  <!-- 배정된 사람 -->
+                  <span v-if="slot.occupant"
+                    class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
+                    <span draggable="true" class="min-w-0 flex-1 cursor-grab whitespace-nowrap select-none active:cursor-grabbing" :class="{
+                      'opacity-30': draggingUserId === slot.occupant.userId,
+                    }" @dragstart="
+                      onDragStart(
+                        $event,
+                        {
+                          origin: 'slot',
+                          teamIndex: teamBoardIndex(pageIndex, indexInPage),
+                          slotIndex,
+                        },
+                        slot.occupant
+                      )
+                      " @dragend="onDragEnd">
+                      {{ slot.occupant.name }}
+                      <span class="ml-1.5 text-xs text-slate-600">
+                        {{ slot.occupant.level }}
+                      </span>
+                    </span>
+
+                    <button type="button"
+                      class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
+                      title="배정 해제" @mousedown.stop
+                      @click.stop="unassign(teamBoardIndex(pageIndex, indexInPage), slotIndex)">
+                      ✕
+                    </button>
+                  </span>
+
+                  <!-- 필요없음 -->
+                  <span v-else-if="!slot.needed"
+                    class="flex min-w-0 flex-1 items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-400">
+                    필요없음
+                  </span>
+
+                  <!-- 빈 슬롯 -->
+                  <span v-else
+                    class="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-400">
+                    배정 필요
+                  </span>
+
+                  <button type="button"
+                    class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition"
+                    :class="slot.needed
+                      ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                      : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
+                    :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'"
+                    @mousedown.stop
+                    @click.stop="setSlotNeeded(teamBoardIndex(pageIndex, indexInPage), slotIndex, !slot.needed)">
+                    {{ slot.needed ? "필요없음" : "필요" }}
+                  </button>
+                </div>
+              </div>
+            </article>
           </div>
-        </article>
+        </div>
       </div>
     </section>
 
@@ -463,6 +525,18 @@ const POSITION_LIST = [
   "K",
 ] as const;
 
+const OPTIONAL_POSITIONS = new Set<string>(["AG", "K"]);
+
+const TEAM_BOARD_NAMES = [
+  "A팀",
+  "B팀",
+  "C팀",
+  "D팀",
+  "E팀",
+  "F팀",
+  "G팀",
+] as const;
+
 type Occupant = {
   userId: number;
   name: string;
@@ -472,6 +546,7 @@ type Occupant = {
 type Slot = {
   position: string;
   occupant: Occupant | null;
+  needed: boolean;
 };
 
 type Board = {
@@ -504,6 +579,37 @@ const statusFilter = ref<
 >("all");
 
 const boards = ref<Board[]>([]);
+
+const boardScroller = ref<HTMLElement | null>(null);
+const boardPageIndex = ref(0);
+const boardPageSize = ref(3);
+const BOARD_PC_QUERY = "(min-width: 768px)";
+const BOARD_CARD_GAP_PX = 16;
+let boardScrollLock = false;
+let boardScrollUnlockTimer: ReturnType<typeof setTimeout> | null = null;
+
+const boardPageCount = computed(() =>
+  Math.max(1, Math.ceil(boards.value.length / boardPageSize.value)),
+);
+
+const boardPages = computed(() => {
+  const size = boardPageSize.value;
+  const pages: Board[][] = [];
+  for (let index = 0; index < boards.value.length; index += size) {
+    pages.push(boards.value.slice(index, index + size));
+  }
+  return pages;
+});
+
+const boardCardStyle = computed(() => {
+  const size = boardPageSize.value;
+  if (size <= 1) {
+    return { width: "100%" };
+  }
+  return {
+    width: `calc((100% - ${(size - 1) * BOARD_CARD_GAP_PX}px) / ${size})`,
+  };
+});
 
 const unassignedPool =
   ref<UnmatchedMember[]>([]);
@@ -609,7 +715,7 @@ async function loadSubmissionStatus() {
   } finally {
     isLoading.value = false;
     syncPool();
-    ensureAssignableBoard();
+    ensureTeamBoards();
   }
 }
 
@@ -739,12 +845,16 @@ function buildBoardsFromMatchResult(
                       member.level,
                   }
                   : null,
+
+                needed: Boolean(member) || !OPTIONAL_POSITIONS.has(position),
               };
             }
           ),
       };
     }
   );
+
+  ensureTeamBoards();
 
   unassignedPool.value =
     result.unmatched;
@@ -759,6 +869,9 @@ function buildBoardsFromMatchResult(
   }
 
   syncPool();
+  for (let index = 0; index < boards.value.length; index += 1) {
+    refreshBoardStatus(index);
+  }
   isDirty.value = false;
 }
 
@@ -782,11 +895,11 @@ async function handleMatch() {
     buildBoardsFromMatchResult(
       result
     );
-    ensureAssignableBoard();
+    ensureTeamBoards();
   } catch {
     matchError.value =
       "자동 팀 배정에 실패했습니다. 제출된 인원은 미배정으로 표시합니다.";
-    ensureAssignableBoard();
+    ensureTeamBoards();
     syncPool();
   } finally {
     isMatching.value = false;
@@ -932,6 +1045,7 @@ function onDropToSlot(
   }
 
   targetSlot.occupant = payload.occupant;
+  targetSlot.needed = true;
   rememberPerson(payload.occupant);
 
   if (payload.origin.origin === "pool") {
@@ -943,6 +1057,7 @@ function onDropToSlot(
   }
 
   syncPool();
+  refreshBoardStatus(teamIndex);
   isDirty.value = true;
   dragPayload.value = null;
 }
@@ -968,6 +1083,7 @@ function onDropToPool(event: DragEvent) {
     }
   }
   syncPool();
+  refreshBoardStatus(payload.origin.teamIndex);
   isDirty.value = true;
   dragPayload.value = null;
 }
@@ -986,7 +1102,30 @@ function unassign(teamIndex: number, slotIndex: number) {
     }
   }
   syncPool();
+  refreshBoardStatus(teamIndex);
   isDirty.value = true;
+}
+
+function setSlotNeeded(teamIndex: number, slotIndex: number, needed: boolean) {
+  const slot = boards.value[teamIndex].slots[slotIndex];
+  if (!needed && slot.occupant) {
+    rememberPerson(slot.occupant);
+    slot.occupant = null;
+  }
+  slot.needed = needed;
+  syncPool();
+  refreshBoardStatus(teamIndex);
+  isDirty.value = true;
+}
+
+function refreshBoardStatus(teamIndex: number) {
+  const team = boards.value[teamIndex];
+  if (!team) {
+    return;
+  }
+  const hasMember = team.slots.some((slot) => slot.occupant);
+  const complete = team.slots.every((slot) => !slot.needed || slot.occupant);
+  team.status = hasMember && complete ? "완료" : "대기";
 }
 
 function rememberPerson(person: {
@@ -1067,6 +1206,9 @@ async function saveAssignments() {
                         slot.occupant
                           ?.userId ??
                         null,
+
+                      needed:
+                        slot.needed,
                     })
                   ),
               })
@@ -1091,25 +1233,137 @@ async function saveAssignments() {
 function emptyBoard(name: string): Board {
   return {
     name,
-    status: "수동 배정",
-    note: "제출 인원이 적어 자동으로 팀을 만들지 못했습니다. 미배정 인원을 끌어다 배정하세요.",
+    status: "대기",
+    note: "",
     slots: POSITION_LIST.map((position) => ({
       position,
       occupant: null,
+      needed: !OPTIONAL_POSITIONS.has(position),
     })),
   };
 }
 
-function ensureAssignableBoard() {
-  if (boards.value.length > 0) return;
-  if (!rows.value.some((row) => row.submitted)) return;
-  boards.value = [emptyBoard("A팀")];
+function ensureTeamBoards() {
+  const byName = new Map(
+    boards.value.map((team) => [team.name, team] as const),
+  );
+
+  boards.value = TEAM_BOARD_NAMES.map(
+    (name) => byName.get(name) ?? emptyBoard(name),
+  );
+  clampBoardPage();
+  nextTick(() => goToPage(boardPageIndex.value, false));
+}
+
+function teamBoardIndex(pageIndex: number, indexInPage: number) {
+  return pageIndex * boardPageSize.value + indexInPage;
+}
+
+function isTeamOnCurrentPage(teamIndex: number) {
+  const start = boardPageIndex.value * boardPageSize.value;
+  return (
+    teamIndex >= start &&
+    teamIndex < start + boardPageSize.value
+  );
+}
+
+function readBoardPageSize() {
+  if (!import.meta.client) return 3;
+  return window.matchMedia(BOARD_PC_QUERY).matches ? 3 : 1;
+}
+
+function clampBoardPage() {
+  if (!boards.value.length) {
+    boardPageIndex.value = 0;
+    return;
+  }
+  boardPageIndex.value = Math.min(
+    boardPageIndex.value,
+    Math.max(0, boardPageCount.value - 1),
+  );
+}
+
+function goToTeam(index: number) {
+  const size = Math.max(1, boardPageSize.value);
+  goToPage(Math.floor(index / size));
+}
+
+function goToPage(index: number, _smooth = true) {
+  if (!boards.value.length) return;
+  const nextIndex = Math.min(
+    Math.max(index, 0),
+    Math.max(0, boardPageCount.value - 1),
+  );
+  boardPageIndex.value = nextIndex;
+
+  const scroller = boardScroller.value;
+  if (!scroller) return;
+
+  boardScrollLock = true;
+  if (boardScrollUnlockTimer) {
+    clearTimeout(boardScrollUnlockTimer);
+  }
+  scroller.scrollTo({
+    left: nextIndex * scroller.clientWidth,
+    behavior: "auto",
+  });
+  boardScrollUnlockTimer = setTimeout(() => {
+    boardScrollLock = false;
+    boardScrollUnlockTimer = null;
+  }, 50);
+}
+
+function onBoardScroll() {
+  if (boardScrollLock) return;
+  const scroller = boardScroller.value;
+  if (!scroller || !boards.value.length) return;
+  const width = scroller.clientWidth;
+  if (width <= 0) return;
+  boardPageIndex.value = Math.min(
+    Math.max(0, boardPageCount.value - 1),
+    Math.max(0, Math.round(scroller.scrollLeft / width)),
+  );
+}
+
+function onBoardKeydown(event: KeyboardEvent) {
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    goToPage(boardPageIndex.value - 1);
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    goToPage(boardPageIndex.value + 1);
+  }
+}
+
+function syncBoardPagePosition() {
+  const nextSize = readBoardPageSize();
+  if (nextSize !== boardPageSize.value) {
+    const firstTeam = boardPageIndex.value * boardPageSize.value;
+    boardPageSize.value = nextSize;
+    goToPage(Math.floor(firstTeam / nextSize), false);
+    return;
+  }
+  goToPage(boardPageIndex.value, false);
 }
 
 onMounted(async () => {
+  if (import.meta.client) {
+    boardPageSize.value = readBoardPageSize();
+    window.addEventListener("resize", syncBoardPagePosition);
+  }
   await loadSubmissionStatus();
   await handleMatch();
-  ensureAssignableBoard();
+  ensureTeamBoards();
   syncPool();
+});
+
+onUnmounted(() => {
+  if (boardScrollUnlockTimer) {
+    clearTimeout(boardScrollUnlockTimer);
+  }
+  if (import.meta.client) {
+    window.removeEventListener("resize", syncBoardPagePosition);
+  }
 });
 </script>
