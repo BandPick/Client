@@ -65,7 +65,7 @@
       </p>
       <textarea v-model="plannerMessage" rows="6" maxlength="500"
         class="min-h-[8.5rem] w-full resize-y rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-        placeholder="예: 이번 공연 너무 기대돼요! / 매주 목요일에는 8시 15분까지만 가능합니다." />
+        placeholder="예: 이번 공연 너무 기대돼요! / 매주 목요일에는 8시 15분까지만 가능합니다. / 여보컬 2명인 팀에 들어가고 싶습니다." />
     </div>
   </div>
 </template>

@@ -121,7 +121,7 @@
             합주 가능 시간대 선택
           </p>
           <p class="mb-2 text-xs text-slate-500">
-            같은 요일에서 위아래로 밀면 연속 선택할 수 있어요. 화면을 스크롤하려면 왼쪽 시간 칸을 밀어주세요.
+            같은 요일에서 위아래로 밀면 드래그 가능합니다. 화면을 스크롤하려면 왼쪽 시간 칸을 이용해주세요.
           </p>
           <div class="w-full overflow-hidden rounded-2xl border border-slate-300">
             <div class="grid grid-cols-[58px_repeat(5,minmax(0,1fr))] sm:grid-cols-[64px_repeat(5,minmax(0,1fr))]">
@@ -141,9 +141,9 @@
                   :class="timeIndex === timeSlots.length - 1 ? '' : 'border-b'">
                   {{ timeIndex % 2 === 0 ? time : "" }}
                 </div>
-                <button v-for="day in days" :key="`${day}-${time}`" type="button"
-                  :data-day="day" :data-time="time"
-                  class="box-border h-9 touch-none select-none border-b border-r border-slate-300 transition-colors" :class="[
+                <button v-for="day in days" :key="`${day}-${time}`" type="button" :data-day="day" :data-time="time"
+                  class="box-border h-9 touch-none select-none border-b border-r border-slate-300 transition-colors"
+                  :class="[
                     isSelectedSlot(day, time)
                       ? 'bg-blue-100 hover:bg-blue-200'
                       : 'bg-white hover:bg-slate-50',
