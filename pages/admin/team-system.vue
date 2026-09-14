@@ -19,11 +19,6 @@
       {{ matchError }}
     </p>
 
-    <!-- 저장 에러 -->
-    <p v-if="saveError" class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {{ saveError }}
-    </p>
-
     <!-- ========================================================= -->
     <!-- 팀 배정 대시보드 -->
     <!-- ========================================================= -->
@@ -423,7 +418,7 @@
     <AdminMemberScheduleDialog :open="scheduleDialogOpen" :member-name="scheduleDialogName"
       :schedules="scheduleDialogSlots" @close="scheduleDialogOpen = false" />
 
-    <CommonAlertDialog :open="alertOpen" type="error" :title="alertTitle" :message="alertMessage"
+    <CommonAlertDialog :open="alertOpen" :type="alertType" :title="alertTitle" :message="alertMessage"
       @close="alertOpen = false" @confirm="alertOpen = false" />
   </div>
 </template>
@@ -569,7 +564,6 @@ const isSaving = ref(false);
 
 const errorMessage = ref("");
 const matchError = ref("");
-const saveError = ref("");
 
 const rows = ref<SubmissionRow[]>([]);
 
@@ -629,8 +623,20 @@ const scheduleDialogSlots = ref<
 >([]);
 
 const alertOpen = ref(false);
+const alertType = ref<"success" | "error">("error");
 const alertTitle = ref("");
 const alertMessage = ref("");
+
+function showAlert(
+  type: "success" | "error",
+  title: string,
+  message: string,
+) {
+  alertType.value = type;
+  alertTitle.value = title;
+  alertMessage.value = message;
+  alertOpen.value = true;
+}
 
 /* =========================================================
  * API URL
@@ -1024,7 +1030,7 @@ function removeFromPool(
   }
 }
 
-/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·겸임을 허용 */
+/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·보컬 겸임을 허용 */
 function onDropToSlot(
   event: DragEvent,
   teamIndex: number,
@@ -1058,6 +1064,23 @@ function onDropToSlot(
     return;
   }
 
+  const currentPositions = assignedPositionsInTeam(
+    payload.occupant.userId,
+    teamIndex,
+  ).filter((position) => position !== targetSlot.position);
+
+  if (
+    !canConcurrentAssign(currentPositions, targetSlot.position)
+  ) {
+    showAlert(
+      "error",
+      "세션 겸임 불가",
+      `${payload.occupant.name} 님은 보컬(V) 겸임만 가능합니다. 보컬이 아닌 세션끼리는 한 팀에서 함께 맡을 수 없습니다.`,
+    );
+    dragPayload.value = null;
+    return;
+  }
+
   targetSlot.occupant = occupantForSlot(payload.occupant, targetSlot.position);
   targetSlot.needed = true;
   rememberPerson(targetSlot.occupant);
@@ -1076,7 +1099,7 @@ function onDropToSlot(
   dragPayload.value = null;
 }
 
-/* 미배정 풀로 드롭: 해당 슬롯만 해제 */
+/* 미배정 풀로 드롭: 해당 슬롯만 해제 (겸임 세션은 유지) */
 function onDropToPool(event: DragEvent) {
   dropTarget.value = null;
 
@@ -1087,14 +1110,11 @@ function onDropToPool(event: DragEvent) {
   }
 
   const { teamIndex, slotIndex } = payload.origin;
-  const occupant = boards.value[teamIndex].slots[slotIndex].occupant;
+  const slot = boards.value[teamIndex].slots[slotIndex];
+  const occupant = slot?.occupant;
   if (occupant) {
     rememberPerson(occupant);
-    for (const slot of boards.value[teamIndex].slots) {
-      if (slot.occupant?.userId === occupant.userId) {
-        slot.occupant = null;
-      }
-    }
+    slot.occupant = null;
   }
   syncPool();
   refreshBoardStatus(payload.origin.teamIndex);
@@ -1102,7 +1122,7 @@ function onDropToPool(event: DragEvent) {
   dragPayload.value = null;
 }
 
-/* 배정 해제 */
+/* 배정 해제: 해당 슬롯만 해제 (겸임 세션은 유지) */
 function unassign(teamIndex: number, slotIndex: number) {
   const slot = boards.value[teamIndex].slots[slotIndex];
   const occupant = slot.occupant;
@@ -1110,11 +1130,7 @@ function unassign(teamIndex: number, slotIndex: number) {
     return;
   }
   rememberPerson(occupant);
-  for (const teamSlot of boards.value[teamIndex].slots) {
-    if (teamSlot.occupant?.userId === occupant.userId) {
-      teamSlot.occupant = null;
-    }
-  }
+  slot.occupant = null;
   syncPool();
   refreshBoardStatus(teamIndex);
   isDirty.value = true;
@@ -1251,11 +1267,30 @@ function maxTeamsFor(userId: number) {
   return Math.max(1, Math.min(3, max));
 }
 
+function assignedPositionsInTeam(userId: number, teamIndex: number) {
+  return (boards.value[teamIndex]?.slots ?? [])
+    .filter((slot) => slot.occupant?.userId === userId)
+    .map((slot) => slot.position);
+}
+
+/** 보컬(V)이 포함된 경우에만 한 팀에서 세션 겸임 허용 */
+function canConcurrentAssign(
+  currentPositions: string[],
+  nextPosition: string,
+) {
+  const positions = [...new Set([...currentPositions, nextPosition])];
+  if (positions.length <= 1) {
+    return true;
+  }
+  return positions.includes("V");
+}
+
 function showMaxTeamAlert(name: string, maxTeams: number) {
-  alertTitle.value = "최대 참여 팀";
-  alertMessage.value =
-    `${name} 님은 이미 최대 참여 팀 수(${maxTeams}팀)에 들어가 있어 다른 팀에 배정할 수 없습니다.`;
-  alertOpen.value = true;
+  showAlert(
+    "error",
+    "최대 참여 팀",
+    `${name} 님은 이미 최대 참여 팀 수(${maxTeams}팀)에 들어가 있어 다른 팀에 배정할 수 없습니다.`,
+  );
 }
 
 function syncPool() {
@@ -1286,50 +1321,93 @@ function syncPool() {
 }
 
 /* =========================================================
- * 배정 저장
+ * 배정 저장 / 복원
  * ========================================================= */
+
+type AssignmentSaveResponse = {
+  teamCount: number;
+  memberCount: number;
+  message: string;
+};
+
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) {
+      return data;
+    }
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
+}
+
+async function loadSavedAssignments(): Promise<boolean> {
+  try {
+    const result = await $fetch<MatchResult>(
+      `${teamFormsApiUrl.value}/assignments`,
+      { method: "GET" },
+    );
+
+    const hasMembers = (result.teams ?? []).some(
+      (team) => (team.members?.length ?? 0) > 0,
+    );
+    if (!hasMembers) {
+      return false;
+    }
+
+    buildBoardsFromMatchResult(result);
+    ensureTeamBoards();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function saveAssignments() {
   isSaving.value = true;
-  saveError.value = "";
 
   try {
-    await $fetch(
+    const response = await $fetch<AssignmentSaveResponse>(
       `${teamFormsApiUrl.value}/assignments`,
       {
         method: "POST",
-
         body: {
-          teams:
-            boards.value.map(
-              (team) => ({
-                name: team.name,
-
-                slots:
-                  team.slots.map(
-                    (slot) => ({
-                      position:
-                        slot.position,
-
-                      userId:
-                        slot.occupant
-                          ?.userId ??
-                        null,
-
-                      needed:
-                        slot.needed,
-                    })
-                  ),
-              })
-            ),
+          teams: boards.value.map((team) => ({
+            name: team.name,
+            slots: team.slots.map((slot) => ({
+              position: slot.position,
+              userId: slot.occupant?.userId ?? null,
+              needed: slot.needed,
+            })),
+          })),
         },
-      }
+      },
     );
 
     isDirty.value = false;
-  } catch {
-    saveError.value =
-      "변경사항 저장에 실패했습니다. 잠시 후 다시 시도해주세요.";
+    showAlert(
+      "success",
+      "저장 완료",
+      response.message ||
+        `팀 ${response.teamCount}개, 배정 ${response.memberCount}명을 저장했습니다.`,
+    );
+  } catch (error) {
+    showAlert(
+      "error",
+      "저장 실패",
+      extractApiErrorMessage(
+        error,
+        "변경사항 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    );
   } finally {
     isSaving.value = false;
   }
@@ -1462,7 +1540,10 @@ onMounted(async () => {
     window.addEventListener("resize", syncBoardPagePosition);
   }
   await loadSubmissionStatus();
-  await handleMatch();
+  const restored = await loadSavedAssignments();
+  if (!restored) {
+    await handleMatch();
+  }
   ensureTeamBoards();
   syncPool();
 });
