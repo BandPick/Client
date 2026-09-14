@@ -81,7 +81,7 @@ import {
   type TeamSkills,
 } from "~/utils/teamForm";
 
-const TEAM_COUNT_OPTIONS = [1, 2, 3] as const;
+const TEAM_COUNT_OPTIONS = [1, 2, 3, 4] as const;
 
 const skills = defineModel<TeamSkills>("skills", { required: true });
 const priorities = defineModel<TeamPriorities>("priorities", { required: true });
