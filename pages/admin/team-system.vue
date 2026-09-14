@@ -57,8 +57,9 @@
 
       <!-- 배정 가능 인원: 남은 참여 팀 수가 있는 부원. 한 팀에 들어가도 여유가 있으면 여기에 남음 -->
       <div v-if="boards.length || unassignedPool.length"
-        class="mb-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-3 transition" :class="{
-          'border-blue-400 bg-blue-50': dropTarget === 'pool',
+        class="sticky top-16 z-20 mb-4 rounded-xl border-2 border-dashed bg-slate-50/95 p-3 shadow-sm backdrop-blur-sm transition" :class="{
+          'border-blue-400 bg-blue-50/95': dropTarget === 'pool',
+          'border-slate-300': dropTarget !== 'pool',
         }" @dragover.prevent="dropTarget = 'pool'" @dragleave="onPoolDragLeave" @drop="onDropToPool">
         <p class="mb-2 text-xs font-semibold text-slate-500">
           배정 가능 인원 ({{ unassignedPool.length }}명)
@@ -87,40 +88,12 @@
         </div>
       </div>
 
-      <!-- 팀 카드: PC 3개 / 모바일 1개씩 넘김 -->
-      <div v-if="boards.length">
-        <div class="mb-3 flex items-center gap-2">
-          <button type="button"
-            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="boardPageIndex <= 0" aria-label="이전 팀" @click="goToPage(boardPageIndex - 1)">
-            ‹
-          </button>
-
-          <div class="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-1">
-            <button v-for="(team, teamIndex) in boards" :key="`page-${team.name}`" type="button"
-              class="rounded-full px-3 py-1.5 text-xs font-semibold transition" :class="isTeamOnCurrentPage(teamIndex)
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" @click="goToTeam(teamIndex)">
-              {{ team.name }}
-            </button>
-          </div>
-
-          <button type="button"
-            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="boardPageIndex >= boardPageCount - 1" aria-label="다음 팀" @click="goToPage(boardPageIndex + 1)">
-            ›
-          </button>
-        </div>
-
-        <div ref="boardScroller"
-          class="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          tabindex="0" @scroll.passive="onBoardScroll" @keydown="onBoardKeydown">
-          <div v-for="(page, pageIndex) in boardPages" :key="`board-page-${pageIndex}`"
-            class="flex shrink-0 snap-start gap-4" :style="{ flex: '0 0 100%' }">
-            <article v-for="(team, indexInPage) in page" :key="team.name"
+      <!-- 팀 카드: PC 한 줄 3팀, 한 화면에서 전체 표시 -->
+      <div v-if="boards.length" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <article v-for="(team, teamIndex) in boards" :key="team.name"
               class="min-w-0 rounded-xl border bg-white p-4 shadow-sm" :class="team.confirmed
                 ? 'border-emerald-300 ring-1 ring-emerald-100'
-                : 'border-slate-200'" :style="boardCardStyle">
+                : 'border-slate-200'">
               <!-- 팀 헤더 -->
               <div class="flex items-center justify-between gap-2">
                 <h3 class="font-semibold text-slate-900">
@@ -150,24 +123,24 @@
                   class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition" :class="{
                     'border-blue-400 bg-blue-50':
                       !team.confirmed &&
-                      dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                      dropTarget === `${teamIndex}-${slotIndex}`,
                     'border-slate-100 bg-slate-50':
                       !slot.needed &&
                       !slot.occupant &&
-                      dropTarget !== `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                      dropTarget !== `${teamIndex}-${slotIndex}`,
                     'border-slate-200':
                       slot.needed ||
                       slot.occupant ||
-                      dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                      dropTarget === `${teamIndex}-${slotIndex}`,
                     'opacity-90': team.confirmed,
                   }" @dragover.prevent="
-                    !team.confirmed && (dropTarget = `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`)
+                    !team.confirmed && (dropTarget = `${teamIndex}-${slotIndex}`)
                     " @dragleave="
-                      onSlotDragLeave(teamBoardIndex(pageIndex, indexInPage), slotIndex)
+                      onSlotDragLeave(teamIndex, slotIndex)
                       " @drop="
                         onDropToSlot(
                           $event,
-                          teamBoardIndex(pageIndex, indexInPage),
+                          teamIndex,
                           slotIndex
                         )
                         ">
@@ -190,7 +163,7 @@
                         $event,
                         {
                           origin: 'slot',
-                          teamIndex: teamBoardIndex(pageIndex, indexInPage),
+                          teamIndex: teamIndex,
                           slotIndex,
                         },
                         slot.occupant
@@ -205,7 +178,7 @@
                     <button v-if="!team.confirmed" type="button"
                       class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
                       title="배정 해제" @mousedown.stop
-                      @click.stop="unassign(teamBoardIndex(pageIndex, indexInPage), slotIndex)">
+                      @click.stop="unassign(teamIndex, slotIndex)">
                       ✕
                     </button>
                   </span>
@@ -227,7 +200,7 @@
                       ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                       : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
                     :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'" @mousedown.stop
-                    @click.stop="setSlotNeeded(teamBoardIndex(pageIndex, indexInPage), slotIndex, !slot.needed)">
+                    @click.stop="setSlotNeeded(teamIndex, slotIndex, !slot.needed)">
                     {{ slot.needed ? "필요없음" : "필요" }}
                   </button>
                   <span v-else class="w-14 shrink-0" />
@@ -240,13 +213,11 @@
                   :class="team.confirmed
                     ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                     : 'bg-emerald-600 text-white hover:bg-emerald-700'" :disabled="isMatching || isSaving"
-                  @click="toggleTeamConfirmed(teamBoardIndex(pageIndex, indexInPage))">
+                  @click="toggleTeamConfirmed(teamIndex)">
                   {{ team.confirmed ? "확정 해제" : "확정" }}
                 </button>
               </div>
             </article>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -291,6 +262,16 @@
 
             <option value="pending">
               미제출
+            </option>
+          </select>
+
+          <select v-model="sessionFilter"
+            class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+            <option value="all">
+              세션 전체
+            </option>
+            <option v-for="position in POSITION_LIST" :key="`session-filter-${position}`" :value="position">
+              {{ position }}
             </option>
           </select>
         </div>
@@ -356,7 +337,7 @@
                   </p>
 
                   <p class="mt-1 text-xs text-slate-400">
-                    검색어나 제출 상태 필터를 확인해주세요.
+                    검색어, 제출 상태, 세션 필터를 확인해주세요.
                   </p>
                 </td>
               </tr>
@@ -391,7 +372,9 @@
                 <td class="px-5 py-4 align-middle">
                   <div v-if="row.submitted && row.positions.length" class="flex flex-wrap gap-1.5">
                     <span v-for="position in row.positions" :key="position"
-                      class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+                      class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium" :class="isFilteredSessionBadge(position)
+                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-slate-50 text-slate-700'">
                       {{ position }}
                     </span>
                   </div>
@@ -608,38 +591,9 @@ const statusFilter = ref<
   "all" | "submitted" | "pending"
 >("all");
 
+const sessionFilter = ref<(typeof POSITION_LIST)[number] | "all">("all");
+
 const boards = ref<Board[]>([]);
-
-const boardScroller = ref<HTMLElement | null>(null);
-const boardPageIndex = ref(0);
-const boardPageSize = ref(3);
-const BOARD_PC_QUERY = "(min-width: 768px)";
-const BOARD_CARD_GAP_PX = 16;
-let boardScrollLock = false;
-let boardScrollUnlockTimer: ReturnType<typeof setTimeout> | null = null;
-
-const boardPageCount = computed(() =>
-  Math.max(1, Math.ceil(boards.value.length / boardPageSize.value)),
-);
-
-const boardPages = computed(() => {
-  const size = boardPageSize.value;
-  const pages: Board[][] = [];
-  for (let index = 0; index < boards.value.length; index += size) {
-    pages.push(boards.value.slice(index, index + size));
-  }
-  return pages;
-});
-
-const boardCardStyle = computed(() => {
-  const size = boardPageSize.value;
-  if (size <= 1) {
-    return { width: "100%" };
-  }
-  return {
-    width: `calc((100% - ${(size - 1) * BOARD_CARD_GAP_PX}px) / ${size})`,
-  };
-});
 
 const unassignedPool =
   ref<UnmatchedMember[]>([]);
@@ -714,6 +668,13 @@ const filteredRows = computed(() => {
       return false;
     }
 
+    if (
+      sessionFilter.value !== "all" &&
+      !rowHasSession(row, sessionFilter.value)
+    ) {
+      return false;
+    }
+
     if (!query) {
       return true;
     }
@@ -723,6 +684,17 @@ const filteredRows = computed(() => {
       .includes(query);
   });
 });
+
+function rowHasSession(row: SubmissionRow, session: string) {
+  return Object.prototype.hasOwnProperty.call(row.positionLevels, session);
+}
+
+function isFilteredSessionBadge(label: string) {
+  if (sessionFilter.value === "all") {
+    return false;
+  }
+  return label.includes(sessionFilter.value);
+}
 
 /* =========================================================
  * 제출 현황 조회
@@ -1080,6 +1052,57 @@ function toggleTeamConfirmed(teamIndex: number) {
   isDirty.value = true;
 }
 
+const DRAG_SCROLL_EDGE_PX = 96;
+const DRAG_SCROLL_MAX_PX = 28;
+let dragScrollY: number | null = null;
+let dragScrollFrame = 0;
+
+function startDragAutoScroll() {
+  if (!import.meta.client) {
+    return;
+  }
+  stopDragAutoScroll();
+  document.addEventListener("dragover", onDragOverForScroll);
+  document.addEventListener("dragend", stopDragAutoScroll);
+  dragScrollFrame = requestAnimationFrame(tickDragScroll);
+}
+
+function onDragOverForScroll(event: DragEvent) {
+  dragScrollY = event.clientY;
+}
+
+function tickDragScroll() {
+  dragScrollFrame = requestAnimationFrame(tickDragScroll);
+  if (dragScrollY == null) {
+    return;
+  }
+
+  const viewportHeight = window.innerHeight;
+  const y = dragScrollY;
+  if (y < DRAG_SCROLL_EDGE_PX) {
+    const intensity = (DRAG_SCROLL_EDGE_PX - y) / DRAG_SCROLL_EDGE_PX;
+    window.scrollBy(0, -Math.ceil(intensity * intensity * DRAG_SCROLL_MAX_PX));
+    return;
+  }
+  if (y > viewportHeight - DRAG_SCROLL_EDGE_PX) {
+    const intensity = (y - (viewportHeight - DRAG_SCROLL_EDGE_PX)) / DRAG_SCROLL_EDGE_PX;
+    window.scrollBy(0, Math.ceil(intensity * intensity * DRAG_SCROLL_MAX_PX));
+  }
+}
+
+function stopDragAutoScroll() {
+  if (!import.meta.client) {
+    return;
+  }
+  document.removeEventListener("dragover", onDragOverForScroll);
+  document.removeEventListener("dragend", stopDragAutoScroll);
+  if (dragScrollFrame) {
+    cancelAnimationFrame(dragScrollFrame);
+    dragScrollFrame = 0;
+  }
+  dragScrollY = null;
+}
+
 /* =========================================================
  * 드래그앤드롭
  * ========================================================= */
@@ -1143,10 +1166,12 @@ function onDragStart(
     event.dataTransfer.effectAllowed =
       "move";
   }
+  startDragAutoScroll();
 }
 
 /* 드래그 종료 */
 function onDragEnd() {
+  stopDragAutoScroll();
   draggingUserId.value = null;
   dragPayload.value = null;
   dropTarget.value = null;
@@ -1641,107 +1666,9 @@ function ensureTeamBoards() {
   boards.value = TEAM_BOARD_NAMES.map(
     (name) => byName.get(name) ?? emptyBoard(name),
   );
-  clampBoardPage();
-  nextTick(() => goToPage(boardPageIndex.value, false));
-}
-
-function teamBoardIndex(pageIndex: number, indexInPage: number) {
-  return pageIndex * boardPageSize.value + indexInPage;
-}
-
-function isTeamOnCurrentPage(teamIndex: number) {
-  const start = boardPageIndex.value * boardPageSize.value;
-  return (
-    teamIndex >= start &&
-    teamIndex < start + boardPageSize.value
-  );
-}
-
-function readBoardPageSize() {
-  if (!import.meta.client) return 3;
-  return window.matchMedia(BOARD_PC_QUERY).matches ? 3 : 1;
-}
-
-function clampBoardPage() {
-  if (!boards.value.length) {
-    boardPageIndex.value = 0;
-    return;
-  }
-  boardPageIndex.value = Math.min(
-    boardPageIndex.value,
-    Math.max(0, boardPageCount.value - 1),
-  );
-}
-
-function goToTeam(index: number) {
-  const size = Math.max(1, boardPageSize.value);
-  goToPage(Math.floor(index / size));
-}
-
-function goToPage(index: number, _smooth = true) {
-  if (!boards.value.length) return;
-  const nextIndex = Math.min(
-    Math.max(index, 0),
-    Math.max(0, boardPageCount.value - 1),
-  );
-  boardPageIndex.value = nextIndex;
-
-  const scroller = boardScroller.value;
-  if (!scroller) return;
-
-  boardScrollLock = true;
-  if (boardScrollUnlockTimer) {
-    clearTimeout(boardScrollUnlockTimer);
-  }
-  scroller.scrollTo({
-    left: nextIndex * scroller.clientWidth,
-    behavior: "auto",
-  });
-  boardScrollUnlockTimer = setTimeout(() => {
-    boardScrollLock = false;
-    boardScrollUnlockTimer = null;
-  }, 50);
-}
-
-function onBoardScroll() {
-  if (boardScrollLock) return;
-  const scroller = boardScroller.value;
-  if (!scroller || !boards.value.length) return;
-  const width = scroller.clientWidth;
-  if (width <= 0) return;
-  boardPageIndex.value = Math.min(
-    Math.max(0, boardPageCount.value - 1),
-    Math.max(0, Math.round(scroller.scrollLeft / width)),
-  );
-}
-
-function onBoardKeydown(event: KeyboardEvent) {
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    goToPage(boardPageIndex.value - 1);
-  }
-  if (event.key === "ArrowRight") {
-    event.preventDefault();
-    goToPage(boardPageIndex.value + 1);
-  }
-}
-
-function syncBoardPagePosition() {
-  const nextSize = readBoardPageSize();
-  if (nextSize !== boardPageSize.value) {
-    const firstTeam = boardPageIndex.value * boardPageSize.value;
-    boardPageSize.value = nextSize;
-    goToPage(Math.floor(firstTeam / nextSize), false);
-    return;
-  }
-  goToPage(boardPageIndex.value, false);
 }
 
 onMounted(async () => {
-  if (import.meta.client) {
-    boardPageSize.value = readBoardPageSize();
-    window.addEventListener("resize", syncBoardPagePosition);
-  }
   await loadSubmissionStatus();
   const restored = await loadSavedAssignments();
   if (!restored) {
@@ -1752,11 +1679,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (boardScrollUnlockTimer) {
-    clearTimeout(boardScrollUnlockTimer);
-  }
-  if (import.meta.client) {
-    window.removeEventListener("resize", syncBoardPagePosition);
-  }
+  stopDragAutoScroll();
 });
 </script>
