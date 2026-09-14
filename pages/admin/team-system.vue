@@ -554,7 +554,7 @@ const POSITION_LIST = [
   "K",
 ] as const;
 
-const OPTIONAL_POSITIONS = new Set<string>(["AG", "K"]);
+const OPTIONAL_POSITIONS = new Set<string>(["K"]);
 
 const TEAM_BOARD_NAMES = [
   "A팀",
@@ -1244,7 +1244,7 @@ function onDropToSlot(
     showAlert(
       "error",
       "세션 겸임 불가",
-      `${payload.occupant.name} 님은 보컬(V) 겸임만 가능합니다. 보컬이 아닌 세션끼리는 한 팀에서 함께 맡을 수 없습니다.`,
+      `${payload.occupant.name} 님은 보컬(V)과 기타(EG1/EG2) 조합만 겸임할 수 있습니다.`,
     );
     dragPayload.value = null;
     return;
@@ -1455,7 +1455,7 @@ function assignedPositionsInTeam(userId: number, teamIndex: number) {
     .map((slot) => slot.position);
 }
 
-/** 보컬(V)이 포함된 경우에만 한 팀에서 세션 겸임 허용 */
+/** 보컬(V) + 기타(EG1/EG2) 조합만 한 팀에서 세션 겸임 허용 */
 function canConcurrentAssign(
   currentPositions: string[],
   nextPosition: string,
@@ -1464,7 +1464,12 @@ function canConcurrentAssign(
   if (positions.length <= 1) {
     return true;
   }
-  return positions.includes("V");
+  if (positions.length > 2) {
+    return false;
+  }
+  const hasVocal = positions.includes("V");
+  const hasGuitar = positions.some((position) => position === "EG1" || position === "EG2");
+  return hasVocal && hasGuitar;
 }
 
 function showMaxTeamAlert(name: string, maxTeams: number) {

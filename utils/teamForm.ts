@@ -1,4 +1,4 @@
-export const TEAM_POSITIONS = ["V", "D", "B", "EG1", "EG2", "AG", "K"] as const;
+export const TEAM_POSITIONS = ["V", "D", "B", "EG1", "EG2", "K"] as const;
 export const PROFICIENCY_LEVELS = ["상", "중", "하"] as const;
 export const TEAM_WEEKDAYS = ["월", "화", "수", "목", "금"] as const;
 
@@ -22,7 +22,6 @@ export function createEmptyTeamSkills(): TeamSkills {
     B: "",
     EG1: "",
     EG2: "",
-    AG: "",
     K: "",
   };
 }
@@ -34,7 +33,6 @@ export function createEmptyTeamPriorities(): TeamPriorities {
     B: null,
     EG1: null,
     EG2: null,
-    AG: null,
     K: null,
   };
 }
