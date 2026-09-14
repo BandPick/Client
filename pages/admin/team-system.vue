@@ -19,11 +19,6 @@
       {{ matchError }}
     </p>
 
-    <!-- 저장 에러 -->
-    <p v-if="saveError" class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {{ saveError }}
-    </p>
-
     <!-- ========================================================= -->
     <!-- 팀 배정 대시보드 -->
     <!-- ========================================================= -->
@@ -42,8 +37,14 @@
           </span>
 
           <button type="button"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isMatching || isSaving || isLoading" @click="handleRematch">
+            {{ isMatching ? "재배정 중..." : "재배정" }}
+          </button>
+
+          <button type="button"
             class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!isDirty || isSaving" @click="saveAssignments">
+            :disabled="!isDirty || isSaving || isMatching" @click="saveAssignments">
             {{ isSaving ? "저장 중..." : "변경사항 저장" }}
           </button>
         </div>
@@ -115,18 +116,26 @@
           <div v-for="(page, pageIndex) in boardPages" :key="`board-page-${pageIndex}`"
             class="flex shrink-0 snap-start gap-4" :style="{ flex: '0 0 100%' }">
             <article v-for="(team, indexInPage) in page" :key="team.name"
-              class="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" :style="boardCardStyle">
+              class="min-w-0 rounded-xl border bg-white p-4 shadow-sm" :class="team.confirmed
+                ? 'border-emerald-300 ring-1 ring-emerald-100'
+                : 'border-slate-200'" :style="boardCardStyle">
               <!-- 팀 헤더 -->
               <div class="flex items-center justify-between gap-2">
                 <h3 class="font-semibold text-slate-900">
                   {{ team.name }}
                 </h3>
 
-                <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium" :class="team.status === '완료'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-slate-100 text-slate-600'">
-                  {{ team.status }}
-                </span>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <span v-if="team.confirmed"
+                    class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    확정
+                  </span>
+                  <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="team.status === '완료'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-slate-100 text-slate-600'">
+                    {{ team.status }}
+                  </span>
+                </div>
               </div>
 
               <p v-if="team.note" class="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-500">
@@ -138,6 +147,7 @@
                 <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
                   class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition" :class="{
                     'border-blue-400 bg-blue-50':
+                      !team.confirmed &&
                       dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
                     'border-slate-100 bg-slate-50':
                       !slot.needed &&
@@ -147,8 +157,9 @@
                       slot.needed ||
                       slot.occupant ||
                       dropTarget === `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`,
+                    'opacity-90': team.confirmed,
                   }" @dragover.prevent="
-                    dropTarget = `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`
+                    !team.confirmed && (dropTarget = `${teamBoardIndex(pageIndex, indexInPage)}-${slotIndex}`)
                     " @dragleave="
                       onSlotDragLeave(teamBoardIndex(pageIndex, indexInPage), slotIndex)
                       " @drop="
@@ -168,11 +179,13 @@
                   <!-- 배정된 사람 -->
                   <span v-if="slot.occupant"
                     class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                    <span draggable="true"
-                      class="min-w-0 flex-1 cursor-grab whitespace-nowrap select-none active:cursor-grabbing" :class="{
+                    <span :draggable="!team.confirmed"
+                      class="min-w-0 flex-1 whitespace-nowrap select-none" :class="{
+                        'cursor-grab active:cursor-grabbing': !team.confirmed,
+                        'cursor-default': team.confirmed,
                         'opacity-30': draggingUserId === slot.occupant.userId,
                       }" @dragstart="
-                      onDragStart(
+                      !team.confirmed && onDragStart(
                         $event,
                         {
                           origin: 'slot',
@@ -188,7 +201,7 @@
                       </span>
                     </span>
 
-                    <button type="button"
+                    <button v-if="!team.confirmed" type="button"
                       class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
                       title="배정 해제" @mousedown.stop
                       @click.stop="unassign(teamBoardIndex(pageIndex, indexInPage), slotIndex)">
@@ -208,15 +221,28 @@
                     배정 필요
                   </span>
 
-                  <button type="button" class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition"
-                    :class="slot.needed
+                  <button v-if="!team.confirmed" type="button"
+                    class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition" :class="slot.needed
                       ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                       : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
                     :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'" @mousedown.stop
                     @click.stop="setSlotNeeded(teamBoardIndex(pageIndex, indexInPage), slotIndex, !slot.needed)">
                     {{ slot.needed ? "필요없음" : "필요" }}
                   </button>
+                  <span v-else class="w-14 shrink-0" />
                 </div>
+              </div>
+
+              <div class="mt-4 border-t border-slate-100 pt-3">
+                <button type="button"
+                  class="w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  :class="team.confirmed
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'"
+                  :disabled="isMatching || isSaving"
+                  @click="toggleTeamConfirmed(teamBoardIndex(pageIndex, indexInPage))">
+                  {{ team.confirmed ? "확정 해제" : "확정" }}
+                </button>
               </div>
             </article>
           </div>
@@ -423,7 +449,7 @@
     <AdminMemberScheduleDialog :open="scheduleDialogOpen" :member-name="scheduleDialogName"
       :schedules="scheduleDialogSlots" @close="scheduleDialogOpen = false" />
 
-    <CommonAlertDialog :open="alertOpen" type="error" :title="alertTitle" :message="alertMessage"
+    <CommonAlertDialog :open="alertOpen" :type="alertType" :title="alertTitle" :message="alertMessage"
       @close="alertOpen = false" @confirm="alertOpen = false" />
   </div>
 </template>
@@ -500,6 +526,8 @@ type MatchTeam = {
   status: string;
   note: string;
   members: MatchMember[];
+  confirmed?: boolean;
+  neededByPosition?: Record<string, boolean>;
 };
 
 type UnmatchedMember = {
@@ -526,7 +554,7 @@ const POSITION_LIST = [
   "K",
 ] as const;
 
-const OPTIONAL_POSITIONS = new Set<string>(["AG", "K"]);
+const OPTIONAL_POSITIONS = new Set<string>(["K"]);
 
 const TEAM_BOARD_NAMES = [
   "A팀",
@@ -536,6 +564,7 @@ const TEAM_BOARD_NAMES = [
   "E팀",
   "F팀",
   "G팀",
+  "H팀",
 ] as const;
 
 type Occupant = {
@@ -555,6 +584,7 @@ type Board = {
   status: string;
   note: string;
   slots: Slot[];
+  confirmed: boolean;
 };
 
 /* =========================================================
@@ -569,7 +599,6 @@ const isSaving = ref(false);
 
 const errorMessage = ref("");
 const matchError = ref("");
-const saveError = ref("");
 
 const rows = ref<SubmissionRow[]>([]);
 
@@ -629,8 +658,20 @@ const scheduleDialogSlots = ref<
 >([]);
 
 const alertOpen = ref(false);
+const alertType = ref<"success" | "error">("error");
 const alertTitle = ref("");
 const alertMessage = ref("");
+
+function showAlert(
+  type: "success" | "error",
+  title: string,
+  message: string,
+) {
+  alertType.value = type;
+  alertTitle.value = title;
+  alertMessage.value = message;
+  alertOpen.value = true;
+}
 
 /* =========================================================
  * API URL
@@ -812,6 +853,20 @@ function openSchedule(row: SubmissionRow) {
   scheduleDialogOpen.value = true;
 }
 
+function resolveSlotNeeded(
+  position: string,
+  hasMember: boolean,
+  neededByPosition?: Record<string, boolean> | null,
+) {
+  if (
+    neededByPosition &&
+    Object.prototype.hasOwnProperty.call(neededByPosition, position)
+  ) {
+    return Boolean(neededByPosition[position]);
+  }
+  return hasMember || !OPTIONAL_POSITIONS.has(position);
+}
+
 /* =========================================================
  * 매칭 결과 → 대시보드 변환
  * ========================================================= */
@@ -819,44 +874,8 @@ function openSchedule(row: SubmissionRow) {
 function buildBoardsFromMatchResult(
   result: MatchResult
 ) {
-  boards.value = result.teams.map(
-    (team) => {
-      const byPosition =
-        new Map(
-          team.members.map(
-            (member) => [
-              member.session,
-              member,
-            ] as const
-          )
-        );
-
-      return {
-        name: team.name,
-        status: team.status,
-        note: team.note,
-
-        slots:
-          POSITION_LIST.map(
-            (position) => {
-              const member =
-                byPosition.get(
-                  position
-                );
-
-              return {
-                position,
-
-                occupant: member
-                  ? occupantForSlot(member, position)
-                  : null,
-
-                needed: Boolean(member) || !OPTIONAL_POSITIONS.has(position),
-              };
-            }
-          ),
-      };
-    }
+  boards.value = result.teams.map((team) =>
+    boardFromMatchTeam(team, team.name, Boolean(team.confirmed)),
   );
 
   ensureTeamBoards();
@@ -881,8 +900,93 @@ function buildBoardsFromMatchResult(
 }
 
 /* =========================================================
- * 팀 매칭
+ * 팀 매칭 / 재배정
  * ========================================================= */
+
+function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): Board {
+  const byPosition = new Map(
+    team.members.map((member) => [member.session, member] as const),
+  );
+  const neededByPosition = team.neededByPosition ?? {};
+
+  return {
+    name,
+    status: team.status,
+    note: team.note,
+    confirmed: Boolean(team.confirmed ?? confirmed),
+    slots: POSITION_LIST.map((position) => {
+      const member = byPosition.get(position);
+      return {
+        position,
+        occupant: member ? occupantForSlot(member, position) : null,
+        needed: resolveSlotNeeded(position, Boolean(member), neededByPosition),
+      };
+    }),
+  };
+}
+
+function lockedTeamsPayload() {
+  return boards.value
+    .filter((team) => team.confirmed)
+    .map((team) => ({
+      name: team.name,
+      members: team.slots
+        .filter((slot) => slot.occupant)
+        .map((slot) => ({
+          userId: slot.occupant!.userId,
+          session: slot.position,
+        })),
+    }));
+}
+
+function applyRematchResult(result: MatchResult) {
+  const confirmedByName = new Map(
+    boards.value
+      .filter((team) => team.confirmed)
+      .map((team) => [team.name, team] as const),
+  );
+  const openNames = TEAM_BOARD_NAMES.filter((name) => !confirmedByName.has(name));
+
+  const rematchedBoards = result.teams
+    .slice(0, openNames.length)
+    .map((team, index) => boardFromMatchTeam(team, openNames[index]!, false));
+
+  const rematchedByName = new Map(
+    rematchedBoards.map((team) => [team.name, team] as const),
+  );
+
+  boards.value = TEAM_BOARD_NAMES.map((name) => {
+    const confirmed = confirmedByName.get(name);
+    if (confirmed) {
+      return confirmed;
+    }
+    return rematchedByName.get(name) ?? emptyBoard(name);
+  });
+
+  for (const team of result.teams) {
+    for (const member of team.members) {
+      rememberPerson(member);
+    }
+  }
+  for (const member of result.unmatched) {
+    rememberPerson(member);
+  }
+  for (const team of confirmedByName.values()) {
+    for (const slot of team.slots) {
+      if (slot.occupant) {
+        rememberPerson(slot.occupant);
+      }
+    }
+  }
+
+  syncPool();
+  for (let index = 0; index < boards.value.length; index += 1) {
+    if (!boards.value[index]?.confirmed) {
+      refreshBoardStatus(index);
+    }
+  }
+  isDirty.value = true;
+}
 
 async function handleMatch() {
   isMatching.value = true;
@@ -909,6 +1013,71 @@ async function handleMatch() {
   } finally {
     isMatching.value = false;
   }
+}
+
+async function handleRematch() {
+  const lockedTeams = lockedTeamsPayload();
+
+  isMatching.value = true;
+  matchError.value = "";
+
+  try {
+    const result = await $fetch<MatchResult>(
+      `${teamFormsApiUrl.value}/match`,
+      {
+        method: "POST",
+        body: { lockedTeams },
+      },
+    );
+
+    if (lockedTeams.length) {
+      applyRematchResult(result);
+    } else {
+      buildBoardsFromMatchResult(result);
+      isDirty.value = true;
+    }
+    ensureTeamBoards();
+    showAlert(
+      "success",
+      "재배정 완료",
+      lockedTeams.length
+        ? `확정 ${lockedTeams.length}개 팀은 유지하고 나머지 인원으로 다시 배정했습니다.`
+        : "전체 팀을 다시 배정했습니다.",
+    );
+  } catch (error) {
+    showAlert(
+      "error",
+      "재배정 실패",
+      extractApiErrorMessage(
+        error,
+        "재배정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    );
+  } finally {
+    isMatching.value = false;
+  }
+}
+
+function toggleTeamConfirmed(teamIndex: number) {
+  const team = boards.value[teamIndex];
+  if (!team) {
+    return;
+  }
+
+  if (!team.confirmed) {
+    const hasMember = team.slots.some((slot) => slot.occupant);
+    if (!hasMember) {
+      showAlert(
+        "error",
+        "확정 불가",
+        "배정된 인원이 없는 팀은 확정할 수 없습니다.",
+      );
+      return;
+    }
+  }
+
+  team.confirmed = !team.confirmed;
+  isDirty.value = true;
 }
 
 /* =========================================================
@@ -1024,7 +1193,7 @@ function removeFromPool(
   }
 }
 
-/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·겸임을 허용 */
+/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·보컬 겸임을 허용 */
 function onDropToSlot(
   event: DragEvent,
   teamIndex: number,
@@ -1037,7 +1206,13 @@ function onDropToSlot(
     return;
   }
 
-  const targetSlot = boards.value[teamIndex].slots[slotIndex];
+  const team = boards.value[teamIndex];
+  if (!team || team.confirmed) {
+    dragPayload.value = null;
+    return;
+  }
+
+  const targetSlot = team.slots[slotIndex];
   const displaced = targetSlot.occupant;
 
   if (
@@ -1054,6 +1229,23 @@ function onDropToSlot(
     assignedTeamCount(payload.occupant.userId) >= maxTeamsFor(payload.occupant.userId)
   ) {
     showMaxTeamAlert(payload.occupant.name, maxTeamsFor(payload.occupant.userId));
+    dragPayload.value = null;
+    return;
+  }
+
+  const currentPositions = assignedPositionsInTeam(
+    payload.occupant.userId,
+    teamIndex,
+  ).filter((position) => position !== targetSlot.position);
+
+  if (
+    !canConcurrentAssign(currentPositions, targetSlot.position)
+  ) {
+    showAlert(
+      "error",
+      "세션 겸임 불가",
+      `${payload.occupant.name} 님은 보컬(V)과 기타(EG1/EG2) 조합만 겸임할 수 있습니다.`,
+    );
     dragPayload.value = null;
     return;
   }
@@ -1076,7 +1268,7 @@ function onDropToSlot(
   dragPayload.value = null;
 }
 
-/* 미배정 풀로 드롭: 해당 슬롯만 해제 */
+/* 미배정 풀로 드롭: 해당 슬롯만 해제 (겸임 세션은 유지) */
 function onDropToPool(event: DragEvent) {
   dropTarget.value = null;
 
@@ -1087,14 +1279,16 @@ function onDropToPool(event: DragEvent) {
   }
 
   const { teamIndex, slotIndex } = payload.origin;
-  const occupant = boards.value[teamIndex].slots[slotIndex].occupant;
+  const team = boards.value[teamIndex];
+  if (!team || team.confirmed) {
+    dragPayload.value = null;
+    return;
+  }
+  const slot = team.slots[slotIndex];
+  const occupant = slot?.occupant;
   if (occupant) {
     rememberPerson(occupant);
-    for (const slot of boards.value[teamIndex].slots) {
-      if (slot.occupant?.userId === occupant.userId) {
-        slot.occupant = null;
-      }
-    }
+    slot.occupant = null;
   }
   syncPool();
   refreshBoardStatus(payload.origin.teamIndex);
@@ -1102,26 +1296,30 @@ function onDropToPool(event: DragEvent) {
   dragPayload.value = null;
 }
 
-/* 배정 해제 */
+/* 배정 해제: 해당 슬롯만 해제 (겸임 세션은 유지) */
 function unassign(teamIndex: number, slotIndex: number) {
-  const slot = boards.value[teamIndex].slots[slotIndex];
+  const team = boards.value[teamIndex];
+  if (!team || team.confirmed) {
+    return;
+  }
+  const slot = team.slots[slotIndex];
   const occupant = slot.occupant;
   if (!occupant) {
     return;
   }
   rememberPerson(occupant);
-  for (const teamSlot of boards.value[teamIndex].slots) {
-    if (teamSlot.occupant?.userId === occupant.userId) {
-      teamSlot.occupant = null;
-    }
-  }
+  slot.occupant = null;
   syncPool();
   refreshBoardStatus(teamIndex);
   isDirty.value = true;
 }
 
 function setSlotNeeded(teamIndex: number, slotIndex: number, needed: boolean) {
-  const slot = boards.value[teamIndex].slots[slotIndex];
+  const team = boards.value[teamIndex];
+  if (!team || team.confirmed) {
+    return;
+  }
+  const slot = team.slots[slotIndex];
   if (!needed && slot.occupant) {
     rememberPerson(slot.occupant);
     slot.occupant = null;
@@ -1251,11 +1449,35 @@ function maxTeamsFor(userId: number) {
   return Math.max(1, Math.min(3, max));
 }
 
+function assignedPositionsInTeam(userId: number, teamIndex: number) {
+  return (boards.value[teamIndex]?.slots ?? [])
+    .filter((slot) => slot.occupant?.userId === userId)
+    .map((slot) => slot.position);
+}
+
+/** 보컬(V) + 기타(EG1/EG2) 조합만 한 팀에서 세션 겸임 허용 */
+function canConcurrentAssign(
+  currentPositions: string[],
+  nextPosition: string,
+) {
+  const positions = [...new Set([...currentPositions, nextPosition])];
+  if (positions.length <= 1) {
+    return true;
+  }
+  if (positions.length > 2) {
+    return false;
+  }
+  const hasVocal = positions.includes("V");
+  const hasGuitar = positions.some((position) => position === "EG1" || position === "EG2");
+  return hasVocal && hasGuitar;
+}
+
 function showMaxTeamAlert(name: string, maxTeams: number) {
-  alertTitle.value = "최대 참여 팀";
-  alertMessage.value =
-    `${name} 님은 이미 최대 참여 팀 수(${maxTeams}팀)에 들어가 있어 다른 팀에 배정할 수 없습니다.`;
-  alertOpen.value = true;
+  showAlert(
+    "error",
+    "최대 참여 팀",
+    `${name} 님은 이미 최대 참여 팀 수(${maxTeams}팀)에 들어가 있어 다른 팀에 배정할 수 없습니다.`,
+  );
 }
 
 function syncPool() {
@@ -1286,50 +1508,94 @@ function syncPool() {
 }
 
 /* =========================================================
- * 배정 저장
+ * 배정 저장 / 복원
  * ========================================================= */
+
+type AssignmentSaveResponse = {
+  teamCount: number;
+  memberCount: number;
+  message: string;
+};
+
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) {
+      return data;
+    }
+    if (data && typeof data === "object" && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
+}
+
+async function loadSavedAssignments(): Promise<boolean> {
+  try {
+    const result = await $fetch<MatchResult>(
+      `${teamFormsApiUrl.value}/assignments`,
+      { method: "GET" },
+    );
+
+    const hasMembers = (result.teams ?? []).some(
+      (team) => (team.members?.length ?? 0) > 0,
+    );
+    if (!hasMembers) {
+      return false;
+    }
+
+    buildBoardsFromMatchResult(result);
+    ensureTeamBoards();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function saveAssignments() {
   isSaving.value = true;
-  saveError.value = "";
 
   try {
-    await $fetch(
+    const response = await $fetch<AssignmentSaveResponse>(
       `${teamFormsApiUrl.value}/assignments`,
       {
         method: "POST",
-
         body: {
-          teams:
-            boards.value.map(
-              (team) => ({
-                name: team.name,
-
-                slots:
-                  team.slots.map(
-                    (slot) => ({
-                      position:
-                        slot.position,
-
-                      userId:
-                        slot.occupant
-                          ?.userId ??
-                        null,
-
-                      needed:
-                        slot.needed,
-                    })
-                  ),
-              })
-            ),
+          teams: boards.value.map((team) => ({
+            name: team.name,
+            confirmed: team.confirmed,
+            slots: team.slots.map((slot) => ({
+              position: slot.position,
+              userId: slot.occupant?.userId ?? null,
+              needed: slot.needed,
+            })),
+          })),
         },
-      }
+      },
     );
 
     isDirty.value = false;
-  } catch {
-    saveError.value =
-      "변경사항 저장에 실패했습니다. 잠시 후 다시 시도해주세요.";
+    showAlert(
+      "success",
+      "저장 완료",
+      response.message ||
+        `팀 ${response.teamCount}개, 배정 ${response.memberCount}명을 저장했습니다.`,
+    );
+  } catch (error) {
+    showAlert(
+      "error",
+      "저장 실패",
+      extractApiErrorMessage(
+        error,
+        "변경사항 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    );
   } finally {
     isSaving.value = false;
   }
@@ -1344,6 +1610,7 @@ function emptyBoard(name: string): Board {
     name,
     status: "대기",
     note: "",
+    confirmed: false,
     slots: POSITION_LIST.map((position) => ({
       position,
       occupant: null,
@@ -1462,7 +1729,10 @@ onMounted(async () => {
     window.addEventListener("resize", syncBoardPagePosition);
   }
   await loadSubmissionStatus();
-  await handleMatch();
+  const restored = await loadSavedAssignments();
+  if (!restored) {
+    await handleMatch();
+  }
   ensureTeamBoards();
   syncPool();
 });

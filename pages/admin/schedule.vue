@@ -2,7 +2,7 @@
  <div class="pb-12 font-sans text-slate-800">
   <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
    <div>
-    <h1 class="text-2xl font-bold text-slate-900">합주 스케줄</h1>
+    <h1 class="text-2xl font-bold text-slate-900">합주 스케줄 - 일반용</h1>
     <p class="mt-1 text-sm text-slate-500">이번 주 합주 일정입니다.</p>
    </div>
 
@@ -142,7 +142,7 @@
 import { ref, computed } from 'vue'
 
 definePageMeta({ layout: 'admin' })
-useHead({ title: '합주 스케줄 — BandPick' })
+useHead({ title: '합주 스케줄-일반용 — BandPick' })
 
 const isTeamListOpen = ref(false)
 
