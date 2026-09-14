@@ -468,8 +468,8 @@ function validateTeamFormForSave(): string {
   if (new Set(ranks).size !== ranks.length) {
     return "포지션 희망 순위는 겹치지 않게 선택해 주세요.";
   }
-  if (maxTeams.value < 1 || maxTeams.value > 3) {
-    return "참여 가능 팀 수는 1팀부터 3팀까지 선택할 수 있습니다.";
+  if (maxTeams.value < 1 || maxTeams.value > 4) {
+    return "참여 가능 팀 수는 1팀부터 4팀까지 선택할 수 있습니다.";
   }
   return validateScheduleForSave();
 }
@@ -809,7 +809,7 @@ function applyTeamForm(payload: {
 }) {
   plannerMessage.value = payload.message ?? payload.teammates ?? "";
   maxTeams.value =
-    payload.maxTeams >= 1 && payload.maxTeams <= 3 ? payload.maxTeams : 1;
+    payload.maxTeams >= 1 && payload.maxTeams <= 4 ? payload.maxTeams : 1;
 
   const nextSkills = createEmptyTeamSkills();
   const nextPriorities = createEmptyTeamPriorities();

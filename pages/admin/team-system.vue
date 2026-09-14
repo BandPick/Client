@@ -55,24 +55,26 @@
         {{ isMatching || isLoading ? "팀 배정 결과를 불러오는 중..." : "제출된 팀제 신청이 없습니다." }}
       </div>
 
-      <!-- 미배정 인원: 팀이 없어도 제출한 부원은 여기에 표시 -->
+      <!-- 배정 가능 인원: 남은 참여 팀 수가 있는 부원. 한 팀에 들어가도 여유가 있으면 여기에 남음 -->
       <div v-if="boards.length || unassignedPool.length"
         class="mb-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-3 transition" :class="{
           'border-blue-400 bg-blue-50': dropTarget === 'pool',
         }" @dragover.prevent="dropTarget = 'pool'" @dragleave="onPoolDragLeave" @drop="onDropToPool">
         <p class="mb-2 text-xs font-semibold text-slate-500">
-          미배정 인원 ({{ unassignedPool.length }}명)
+          배정 가능 인원 ({{ unassignedPool.length }}명)
         </p>
 
         <div v-if="!unassignedPool.length" class="text-xs text-slate-400">
-          전원 배정 완료
+          추가 배정 가능한 인원이 없습니다
         </div>
 
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="member in unassignedPool" :key="member.userId" draggable="true"
-            class="cursor-grab select-none rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm active:cursor-grabbing"
+            class="cursor-grab select-none rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm active:cursor-grabbing"
             :class="{
               'opacity-30': draggingUserId === member.userId,
+              'border-sky-300 bg-sky-50 text-slate-700': hasAnyAssignment(member.userId),
+              'border-slate-300 bg-white text-slate-700': !hasAnyAssignment(member.userId),
             }" @dragstart="
               onDragStart(
                 $event,
@@ -80,7 +82,7 @@
                 member
               )
               " @dragend="onDragEnd">
-            {{ member.name }}
+            {{ memberLabel(member.name, member.userId) }}
           </span>
         </div>
       </div>
@@ -179,12 +181,11 @@
                   <!-- 배정된 사람 -->
                   <span v-if="slot.occupant"
                     class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                    <span :draggable="!team.confirmed"
-                      class="min-w-0 flex-1 whitespace-nowrap select-none" :class="{
-                        'cursor-grab active:cursor-grabbing': !team.confirmed,
-                        'cursor-default': team.confirmed,
-                        'opacity-30': draggingUserId === slot.occupant.userId,
-                      }" @dragstart="
+                    <span :draggable="!team.confirmed" class="min-w-0 flex-1 whitespace-nowrap select-none" :class="{
+                      'cursor-grab active:cursor-grabbing': !team.confirmed,
+                      'cursor-default': team.confirmed,
+                      'opacity-30': draggingUserId === slot.occupant.userId,
+                    }" @dragstart="
                       !team.confirmed && onDragStart(
                         $event,
                         {
@@ -195,7 +196,7 @@
                         slot.occupant
                       )
                       " @dragend="onDragEnd">
-                      {{ slot.occupant.name }}
+                      {{ memberLabel(slot.occupant.name, slot.occupant.userId) }}
                       <span class="ml-1.5 text-xs text-slate-600">
                         {{ levelForPosition(slot.occupant.userId, slot.position) }}
                       </span>
@@ -238,8 +239,7 @@
                   class="w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
                   :class="team.confirmed
                     ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700'"
-                  :disabled="isMatching || isSaving"
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'" :disabled="isMatching || isSaving"
                   @click="toggleTeamConfirmed(teamBoardIndex(pageIndex, indexInPage))">
                   {{ team.confirmed ? "확정 해제" : "확정" }}
                 </button>
@@ -1244,7 +1244,7 @@ function onDropToSlot(
     showAlert(
       "error",
       "세션 겸임 불가",
-      `${payload.occupant.name} 님은 보컬(V)과 기타(EG1/EG2) 조합만 겸임할 수 있습니다.`,
+      `${payload.occupant.name} 님은 보컬(V)과 악기 한 자리만 겸임할 수 있습니다.`,
     );
     dragPayload.value = null;
     return;
@@ -1446,7 +1446,15 @@ function assignedTeamCount(userId: number) {
 function maxTeamsFor(userId: number) {
   const row = rows.value.find((item) => item.userId === userId);
   const max = row?.maxTeams ?? 1;
-  return Math.max(1, Math.min(3, max));
+  return Math.max(1, Math.min(4, max));
+}
+
+function remainingTeamsFor(userId: number) {
+  return Math.max(0, maxTeamsFor(userId) - assignedTeamCount(userId));
+}
+
+function memberLabel(name: string, userId: number) {
+  return `${name}(${remainingTeamsFor(userId)})`;
 }
 
 function assignedPositionsInTeam(userId: number, teamIndex: number) {
@@ -1455,7 +1463,7 @@ function assignedPositionsInTeam(userId: number, teamIndex: number) {
     .map((slot) => slot.position);
 }
 
-/** 보컬(V) + 기타(EG1/EG2) 조합만 한 팀에서 세션 겸임 허용 */
+/** 보컬(V) + 악기 한 자리만 한 팀에서 세션 겸임 허용 */
 function canConcurrentAssign(
   currentPositions: string[],
   nextPosition: string,
@@ -1467,9 +1475,7 @@ function canConcurrentAssign(
   if (positions.length > 2) {
     return false;
   }
-  const hasVocal = positions.includes("V");
-  const hasGuitar = positions.some((position) => position === "EG1" || position === "EG2");
-  return hasVocal && hasGuitar;
+  return positions.includes("V") && positions.some((position) => position !== "V");
 }
 
 function showMaxTeamAlert(name: string, maxTeams: number) {
@@ -1498,12 +1504,20 @@ function syncPool() {
   }
 
   unassignedPool.value = [...knownPeople.value.values()]
-    .filter((person) => !hasAnyAssignment(person.userId))
+    .filter((person) => remainingTeamsFor(person.userId) > 0)
+    .sort((a, b) => {
+      const aAssigned = hasAnyAssignment(a.userId) ? 1 : 0;
+      const bAssigned = hasAnyAssignment(b.userId) ? 1 : 0;
+      if (aAssigned !== bAssigned) {
+        return aAssigned - bAssigned;
+      }
+      return a.name.localeCompare(b.name, "ko");
+    })
     .map((person) => ({
       userId: person.userId,
       name: person.name,
       level: person.level,
-      reason: "미배정",
+      reason: hasAnyAssignment(person.userId) ? "추가배정" : "미배정",
     }));
 }
 
@@ -1585,7 +1599,7 @@ async function saveAssignments() {
       "success",
       "저장 완료",
       response.message ||
-        `팀 ${response.teamCount}개, 배정 ${response.memberCount}명을 저장했습니다.`,
+      `팀 ${response.teamCount}개, 배정 ${response.memberCount}명을 저장했습니다.`,
     );
   } catch (error) {
     showAlert(
