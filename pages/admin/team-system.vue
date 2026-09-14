@@ -526,6 +526,8 @@ type MatchTeam = {
   status: string;
   note: string;
   members: MatchMember[];
+  confirmed?: boolean;
+  neededByPosition?: Record<string, boolean>;
 };
 
 type UnmatchedMember = {
@@ -851,6 +853,20 @@ function openSchedule(row: SubmissionRow) {
   scheduleDialogOpen.value = true;
 }
 
+function resolveSlotNeeded(
+  position: string,
+  hasMember: boolean,
+  neededByPosition?: Record<string, boolean> | null,
+) {
+  if (
+    neededByPosition &&
+    Object.prototype.hasOwnProperty.call(neededByPosition, position)
+  ) {
+    return Boolean(neededByPosition[position]);
+  }
+  return hasMember || !OPTIONAL_POSITIONS.has(position);
+}
+
 /* =========================================================
  * 매칭 결과 → 대시보드 변환
  * ========================================================= */
@@ -858,45 +874,8 @@ function openSchedule(row: SubmissionRow) {
 function buildBoardsFromMatchResult(
   result: MatchResult
 ) {
-  boards.value = result.teams.map(
-    (team) => {
-      const byPosition =
-        new Map(
-          team.members.map(
-            (member) => [
-              member.session,
-              member,
-            ] as const
-          )
-        );
-
-      return {
-        name: team.name,
-        status: team.status,
-        note: team.note,
-        confirmed: false,
-
-        slots:
-          POSITION_LIST.map(
-            (position) => {
-              const member =
-                byPosition.get(
-                  position
-                );
-
-              return {
-                position,
-
-                occupant: member
-                  ? occupantForSlot(member, position)
-                  : null,
-
-                needed: Boolean(member) || !OPTIONAL_POSITIONS.has(position),
-              };
-            }
-          ),
-      };
-    }
+  boards.value = result.teams.map((team) =>
+    boardFromMatchTeam(team, team.name, Boolean(team.confirmed)),
   );
 
   ensureTeamBoards();
@@ -928,18 +907,19 @@ function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): B
   const byPosition = new Map(
     team.members.map((member) => [member.session, member] as const),
   );
+  const neededByPosition = team.neededByPosition ?? {};
 
   return {
     name,
     status: team.status,
     note: team.note,
-    confirmed,
+    confirmed: Boolean(team.confirmed ?? confirmed),
     slots: POSITION_LIST.map((position) => {
       const member = byPosition.get(position);
       return {
         position,
         occupant: member ? occupantForSlot(member, position) : null,
-        needed: Boolean(member) || !OPTIONAL_POSITIONS.has(position),
+        needed: resolveSlotNeeded(position, Boolean(member), neededByPosition),
       };
     }),
   };
@@ -1584,6 +1564,7 @@ async function saveAssignments() {
         body: {
           teams: boards.value.map((team) => ({
             name: team.name,
+            confirmed: team.confirmed,
             slots: team.slots.map((slot) => ({
               position: slot.position,
               userId: slot.occupant?.userId ?? null,
