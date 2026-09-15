@@ -200,12 +200,9 @@
                   </div>
 
                   <div class="flex h-full flex-col gap-0.5 overflow-hidden" :class="isEditing ? 'pt-1' : ''">
-                    <span class="truncate text-xs font-semibold">{{ event.title }}</span>
-                    <span class="truncate text-[11px] opacity-75">
+                    <span class="truncate text-s font-bold">{{ event.title }}</span>
+                    <span class="truncate text-[15px] opacity-75">
                       {{ formatTime(event.startHour) }} – {{ formatTime(event.endHour) }}
-                    </span>
-                    <span class="truncate text-[11px] opacity-75">
-                      👥 {{ event.members.join(", ") }}
                     </span>
                   </div>
 
@@ -295,6 +292,45 @@
       @close="alertOpen = false"
       @confirm="alertOpen = false"
     />
+
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="availabilityConfirm"
+          class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
+        >
+          <div class="relative w-full max-w-sm rounded-2xl bg-white p-7 shadow-2xl">
+            <h2 class="mb-3 text-lg font-bold text-slate-900">합주 가능 시간 확인</h2>
+            <p class="text-sm leading-6 text-slate-600">
+              전체 합주가 불가능한 시간입니다. 변경하시겠습니까?
+            </p>
+            <div class="mt-6 flex gap-2">
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                @click="rejectAvailabilityChange"
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                @click="acceptAvailabilityChange"
+              >
+                예
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -303,14 +339,14 @@ definePageMeta({ layout: "admin" });
 useHead({ title: "합주 스케줄-팀제용 — BandPick" });
 
 const TEAM_COLORS = [
-  "#f87171",
-  "#60a5fa",
-  "#a78bfa",
-  "#34d399",
-  "#fbbf24",
-  "#fb7185",
-  "#38bdf8",
-  "#c084fc",
+  "#fa0000",
+  "#FF7B00",
+  "#00A612",
+  "#00B3FF",
+  "#0000ff",
+  "#800080",
+  "#FF40F0",
+  "#964B00",
 ] as const;
 
 type ApiTeam = {
@@ -318,6 +354,7 @@ type ApiTeam = {
   name: string;
   confirmed: boolean;
   members: string[];
+  commonSlots?: string[];
 };
 
 type ApiEvent = {
@@ -376,6 +413,7 @@ const teams = ref<ScheduleTeam[]>([]);
 const events = ref<ScheduleEvent[]>([]);
 const snapshotEvents = ref<ScheduleEvent[]>([]);
 const dirtyTeamIds = ref<Set<number>>(new Set());
+const commonSlotsByTeam = ref<Map<number, Set<string>>>(new Map());
 const visibleTeams = ref<number[]>([]);
 const selectedEvent = ref<SelectedScheduleEvent | null>(null);
 const weekOffset = ref(0);
@@ -398,8 +436,16 @@ type MoveState = {
   duration: number;
   pointerId: number;
 };
+type AvailabilityConfirmState = {
+  eventId: number;
+  teamId: number;
+  originDay: string;
+  originStart: number;
+  originEnd: number;
+};
 const resizing = ref<ResizeState | null>(null);
 const moving = ref<MoveState | null>(null);
+const availabilityConfirm = ref<AvailabilityConfirmState | null>(null);
 const suppressClick = ref(false);
 
 const alertOpen = ref(false);
@@ -505,15 +551,22 @@ function cloneEvents(list: ScheduleEvent[]) {
 
 function applyBoard(result: ApiBoard, resetVisibility = false) {
   const colorByTeamId = new Map<number, string>();
+  const nextCommon = new Map<number, Set<string>>();
+
   teams.value = (result.teams ?? []).map((team, index) => {
     const color = TEAM_COLORS[index % TEAM_COLORS.length]!;
     colorByTeamId.set(team.id, color);
+    nextCommon.set(
+      team.id,
+      new Set((team.commonSlots ?? []).map((slot) => String(slot).trim())),
+    );
     return {
       id: team.id,
       name: team.name,
       color,
     };
   });
+  commonSlotsByTeam.value = nextCommon;
 
   events.value = (result.events ?? []).map((event) => ({
     id: event.id,
@@ -587,12 +640,34 @@ function markDirty(teamId?: number) {
   }
 }
 
+function refreshDirtyState() {
+  const nextDirty = new Set<number>();
+  const byId = new Map(snapshotEvents.value.map((event) => [event.id, event]));
+
+  for (const event of events.value) {
+    const original = byId.get(event.id);
+    if (
+      !original ||
+      original.day !== event.day ||
+      original.startHour !== event.startHour ||
+      original.endHour !== event.endHour
+    ) {
+      nextDirty.add(event.teamId);
+    }
+  }
+
+  dirtyTeamIds.value = nextDirty;
+  isDirty.value = nextDirty.size > 0;
+}
+
 function updateEventPlacement(
   eventId: number,
   day: string,
   startHour: number,
   endHour: number,
+  options?: { trackDirty?: boolean },
 ) {
+  const trackDirty = options?.trackDirty !== false;
   const index = events.value.findIndex((event) => event.id === eventId);
   if (index < 0) return;
   const current = events.value[index]!;
@@ -609,7 +684,9 @@ function updateEventPlacement(
     startHour,
     endHour,
   };
-  markDirty(current.teamId);
+  if (trackDirty) {
+    markDirty(current.teamId);
+  }
 
   if (selectedEvent.value?.id === eventId) {
     const dayInfo = weekDays.value.find((item) => item.key === day);
@@ -623,8 +700,89 @@ function updateEventPlacement(
   }
 }
 
+function slotKeysForRange(day: string, startHour: number, endHour: number) {
+  const keys: string[] = [];
+  for (
+    let hour = startHour;
+    hour < endHour - 1e-9;
+    hour = Number((hour + SLOT_STEP).toFixed(2))
+  ) {
+    keys.push(`${day}|${formatTime(hour)}`);
+  }
+  return keys;
+}
+
+function isFullyCommonAvailable(
+  teamId: number,
+  day: string,
+  startHour: number,
+  endHour: number,
+) {
+  const common = commonSlotsByTeam.value.get(teamId);
+  if (!common) return true;
+  if (common.size === 0) return false;
+  return slotKeysForRange(day, startHour, endHour).every((key) =>
+    common.has(key),
+  );
+}
+
+function requestAvailabilityConfirm(params: {
+  eventId: number;
+  teamId: number;
+  day: string;
+  startHour: number;
+  endHour: number;
+  originDay: string;
+  originStart: number;
+  originEnd: number;
+}) {
+  const changed =
+    params.day !== params.originDay ||
+    params.startHour !== params.originStart ||
+    params.endHour !== params.originEnd;
+  if (!changed) return;
+
+  if (
+    isFullyCommonAvailable(
+      params.teamId,
+      params.day,
+      params.startHour,
+      params.endHour,
+    )
+  ) {
+    return;
+  }
+
+  availabilityConfirm.value = {
+    eventId: params.eventId,
+    teamId: params.teamId,
+    originDay: params.originDay,
+    originStart: params.originStart,
+    originEnd: params.originEnd,
+  };
+}
+
+function acceptAvailabilityChange() {
+  availabilityConfirm.value = null;
+}
+
+function rejectAvailabilityChange() {
+  const pending = availabilityConfirm.value;
+  if (!pending) return;
+
+  updateEventPlacement(
+    pending.eventId,
+    pending.originDay,
+    pending.originStart,
+    pending.originEnd,
+    { trackDirty: false },
+  );
+  refreshDirtyState();
+  availabilityConfirm.value = null;
+}
+
 function startResize(event: ScheduleEvent, edge: ResizeEdge, pointerEvent: PointerEvent) {
-  if (!isEditing.value) return;
+  if (!isEditing.value || availabilityConfirm.value) return;
   resizing.value = {
     eventId: event.id,
     edge,
@@ -669,7 +827,7 @@ function onResizeMove(pointerEvent: PointerEvent) {
     suppressClick.value = true;
   }
 
-  const current = events.value.find((event) => event.id === state.eventId);
+  const current = events.value.find((item) => item.id === state.eventId);
   if (!current) return;
   updateEventPlacement(state.eventId, current.day, nextStart, nextEnd);
 }
@@ -678,10 +836,24 @@ function onResizeEnd(pointerEvent: PointerEvent) {
   const state = resizing.value;
   if (!state || pointerEvent.pointerId !== state.pointerId) return;
 
+  const current = events.value.find((item) => item.id === state.eventId);
   resizing.value = null;
   window.removeEventListener("pointermove", onResizeMove);
   window.removeEventListener("pointerup", onResizeEnd);
   window.removeEventListener("pointercancel", onResizeEnd);
+
+  if (current) {
+    requestAvailabilityConfirm({
+      eventId: current.id,
+      teamId: current.teamId,
+      day: current.day,
+      startHour: current.startHour,
+      endHour: current.endHour,
+      originDay: current.day,
+      originStart: state.originStart,
+      originEnd: state.originEnd,
+    });
+  }
 
   if (suppressClick.value) {
     window.setTimeout(() => {
@@ -691,7 +863,7 @@ function onResizeEnd(pointerEvent: PointerEvent) {
 }
 
 function onCardPointerDown(event: ScheduleEvent, pointerEvent: PointerEvent) {
-  if (!isEditing.value) return;
+  if (!isEditing.value || availabilityConfirm.value) return;
   if (pointerEvent.button !== 0) return;
   const target = pointerEvent.target as HTMLElement | null;
   if (target?.closest("[title='시작 시간 조절'], [title='종료 시간 조절']")) {
@@ -737,9 +909,10 @@ function onMoveMove(pointerEvent: PointerEvent) {
     START_HOUR,
     END_HOUR - duration,
   );
-  const nextEnd = nextStart + duration;
+  let nextEnd = nextStart + duration;
   if (nextEnd > END_HOUR) {
     nextStart = END_HOUR - duration;
+    nextEnd = nextStart + duration;
   }
 
   if (cell.day !== state.originDay || nextStart !== state.originStart) {
@@ -753,10 +926,24 @@ function onMoveEnd(pointerEvent: PointerEvent) {
   const state = moving.value;
   if (!state || pointerEvent.pointerId !== state.pointerId) return;
 
+  const current = events.value.find((item) => item.id === state.eventId);
   moving.value = null;
   window.removeEventListener("pointermove", onMoveMove);
   window.removeEventListener("pointerup", onMoveEnd);
   window.removeEventListener("pointercancel", onMoveEnd);
+
+  if (current) {
+    requestAvailabilityConfirm({
+      eventId: current.id,
+      teamId: current.teamId,
+      day: current.day,
+      startHour: current.startHour,
+      endHour: current.endHour,
+      originDay: state.originDay,
+      originStart: state.originStart,
+      originEnd: state.originEnd,
+    });
+  }
 
   if (suppressClick.value) {
     window.setTimeout(() => {
@@ -771,6 +958,7 @@ function enterEditMode() {
   isEditing.value = true;
   isDirty.value = false;
   selectedEvent.value = null;
+  availabilityConfirm.value = null;
   errorMessage.value = "";
 }
 
@@ -781,6 +969,7 @@ async function cancelEditMode() {
   isDirty.value = false;
   resizing.value = null;
   moving.value = null;
+  availabilityConfirm.value = null;
 }
 
 function prevWeek() {
