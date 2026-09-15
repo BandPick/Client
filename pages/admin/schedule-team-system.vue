@@ -105,7 +105,7 @@
       v-if="isEditing"
       class="mb-3 text-xs text-slate-500"
     >
-      수정 모드: 카드 위·아래로 시간을 조절하고, 본문을 드래그해 요일/시간을 옮길 수 있습니다.
+      수정 모드: 카드 위·아래/드래그로 조절하거나, 카드를 클릭해 요일·시간을 직접 입력할 수 있습니다. (5분 단위)
     </p>
 
     <div class="mb-3 flex items-center gap-3">
@@ -172,10 +172,10 @@
             >
               <template v-for="event in getEventsAt(day.key, slot)" :key="event.id">
                 <div
-                  v-if="visibleTeams.includes(event.teamId) && event.startHour === slot"
+                  v-if="visibleTeams.includes(event.teamId) && gridSlotOf(event.startHour) === slot"
                   role="button"
                   tabindex="0"
-                  class="absolute inset-x-1 top-0.5 z-10 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
+                  class="absolute inset-x-1 z-10 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
                   :class="[
                     isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                     resizing?.eventId === event.id || moving?.eventId === event.id
@@ -243,7 +243,7 @@
       <div
         v-if="selectedEvent"
         class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
-        @click.self="selectedEvent = null"
+        @click.self="closeEventDialog"
       >
         <div
           class="relative w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl"
@@ -252,34 +252,93 @@
           <button
             type="button"
             class="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-sm text-slate-500 hover:bg-slate-200"
-            @click="selectedEvent = null"
+            @click="closeEventDialog"
           >
             ✕
           </button>
 
           <h2 class="mb-4 text-xl font-bold text-slate-900">{{ selectedEvent.title }}</h2>
 
-          <div class="space-y-2 text-sm text-slate-700">
-            <div class="flex items-start gap-2">
-              <span>📅</span>
-              <span>
-                {{ selectedEvent.dayLabel }}
-                {{ formatTime(selectedEvent.startHour) }} –
-                {{ formatTime(selectedEvent.endHour) }}
-              </span>
-            </div>
-            <div class="flex items-start gap-2">
-              <span>👥</span>
-              <span>{{ selectedEvent.members.join(", ") }}</span>
-            </div>
-          </div>
+          <template v-if="isEditing">
+            <div class="space-y-3 text-sm text-slate-700">
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-500">요일</span>
+                <select
+                  v-model="editForm.day"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option v-for="day in weekDays" :key="day.key" :value="day.key">
+                    {{ day.name }} ({{ day.date }})
+                  </option>
+                </select>
+              </label>
 
-          <div
-            v-if="selectedEvent.note"
-            class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500"
-          >
-            {{ selectedEvent.note }}
-          </div>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-500">시작</span>
+                  <input
+                    v-model="editForm.startTime"
+                    type="time"
+                    step="300"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-500">종료</span>
+                  <input
+                    v-model="editForm.endTime"
+                    type="time"
+                    step="300"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+              </div>
+
+              <p class="text-xs text-slate-400">시간은 5분 단위로 맞춰집니다. (09:00–22:00)</p>
+              <p v-if="editFormError" class="text-xs text-red-600">{{ editFormError }}</p>
+            </div>
+
+            <div class="mt-5 flex gap-2">
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                @click="closeEventDialog"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                @click="applyManualEdit"
+              >
+                반영
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="space-y-2 text-sm text-slate-700">
+              <div class="flex items-start gap-2">
+                <span>📅</span>
+                <span>
+                  {{ selectedEvent.dayLabel }}
+                  {{ formatTime(selectedEvent.startHour) }} –
+                  {{ formatTime(selectedEvent.endHour) }}
+                </span>
+              </div>
+              <div class="flex items-start gap-2">
+                <span>👥</span>
+                <span>{{ selectedEvent.members.join(", ") }}</span>
+              </div>
+            </div>
+
+            <div
+              v-if="selectedEvent.note"
+              class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500"
+            >
+              {{ selectedEvent.note }}
+            </div>
+          </template>
         </div>
       </div>
     </Transition>
@@ -416,6 +475,12 @@ const dirtyTeamIds = ref<Set<number>>(new Set());
 const commonSlotsByTeam = ref<Map<number, Set<string>>>(new Map());
 const visibleTeams = ref<number[]>([]);
 const selectedEvent = ref<SelectedScheduleEvent | null>(null);
+const editForm = ref({
+  day: "mon",
+  startTime: "09:00",
+  endTime: "09:30",
+});
+const editFormError = ref("");
 const weekOffset = ref(0);
 const boardScrollEl = ref<HTMLElement | null>(null);
 
@@ -468,13 +533,16 @@ const dayLabels: Record<string, string> = {
   thu: "목",
   fri: "금",
 };
-const SLOT_STEP = 0.5;
+const GRID_STEP = 0.5;
+const SNAP_MINUTES = 5;
+const SNAP_STEP = SNAP_MINUTES / 60;
 const SLOT_HEIGHT = 40;
+const PX_PER_MINUTE = SLOT_HEIGHT / (GRID_STEP * 60);
 const START_HOUR = 9;
 const END_HOUR = 22;
 const timeSlots = Array.from(
-  { length: (END_HOUR - START_HOUR) / SLOT_STEP },
-  (_, i) => START_HOUR + i * SLOT_STEP,
+  { length: (END_HOUR - START_HOUR) / GRID_STEP },
+  (_, i) => START_HOUR + i * GRID_STEP,
 );
 
 const scheduleBoardApiUrl = computed(() => {
@@ -535,14 +603,14 @@ function parseHour(time: string) {
 }
 
 function formatTime(hour: number) {
-  const h = Math.floor(hour);
-  let m = Math.round((hour - h) * 60);
-  let normalizedHour = h;
-  if (m >= 60) {
-    normalizedHour += 1;
-    m = 0;
-  }
-  return `${String(normalizedHour).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const totalMinutes = Math.round(hour * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = ((totalMinutes % 60) + 60) % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function gridSlotOf(hour: number) {
+  return Math.floor((hour + 1e-9) / GRID_STEP) * GRID_STEP;
 }
 
 function cloneEvents(list: ScheduleEvent[]) {
@@ -593,10 +661,12 @@ function getEventsAt(day: string, hour: number) {
 }
 
 function getEventStyle(event: ScheduleEvent) {
-  const duration = event.endHour - event.startHour;
-  const slotCount = duration / SLOT_STEP;
+  const gridStart = gridSlotOf(event.startHour);
+  const topOffset = (event.startHour - gridStart) * 60 * PX_PER_MINUTE;
+  const durationMinutes = (event.endHour - event.startHour) * 60;
   return {
-    height: `${slotCount * SLOT_HEIGHT - 4}px`,
+    top: `${topOffset + 0.5}px`,
+    height: `${Math.max(durationMinutes * PX_PER_MINUTE - 4, 10)}px`,
     background: `${event.color}28`,
     borderLeft: `3px solid ${event.color}`,
     color: event.color,
@@ -617,20 +687,95 @@ function selectEvent(event: ScheduleEvent) {
     ...event,
     dayLabel: dayInfo ? `${dayInfo.name} (${dayInfo.date})` : "",
   };
+  editForm.value = {
+    day: event.day,
+    startTime: formatTime(event.startHour),
+    endTime: formatTime(event.endHour),
+  };
+  editFormError.value = "";
+}
+
+function closeEventDialog() {
+  selectedEvent.value = null;
+  editFormError.value = "";
 }
 
 function onEventClick(event: ScheduleEvent) {
   if (suppressClick.value || resizing.value || moving.value) return;
-  if (isEditing.value) return;
+  if (availabilityConfirm.value) return;
   selectEvent(event);
 }
 
+function applyManualEdit() {
+  const current = selectedEvent.value;
+  if (!current || !isEditing.value) return;
+
+  const day = String(editForm.value.day);
+  if (!dayNames.includes(day as (typeof dayNames)[number])) {
+    editFormError.value = "요일을 선택해 주세요.";
+    return;
+  }
+
+  const startHour = snapHour(parseHour(editForm.value.startTime));
+  const endHour = snapHour(parseHour(editForm.value.endTime));
+
+  if (
+    !Number.isFinite(startHour) ||
+    !Number.isFinite(endHour) ||
+    editForm.value.startTime.length < 4 ||
+    editForm.value.endTime.length < 4
+  ) {
+    editFormError.value = "시작/종료 시간을 입력해 주세요.";
+    return;
+  }
+
+  if (startHour < START_HOUR || endHour > END_HOUR) {
+    editFormError.value = "시간은 09:00–22:00 범위여야 합니다.";
+    return;
+  }
+
+  if (endHour - startHour < SNAP_STEP - 1e-9) {
+    editFormError.value = "종료 시간은 시작 시간보다 최소 5분 뒤여야 합니다.";
+    return;
+  }
+
+  const originDay = current.day;
+  const originStart = current.startHour;
+  const originEnd = current.endHour;
+
+  editForm.value = {
+    day,
+    startTime: formatTime(startHour),
+    endTime: formatTime(endHour),
+  };
+  editFormError.value = "";
+
+  updateEventPlacement(current.id, day, startHour, endHour);
+  closeEventDialog();
+  requestAvailabilityConfirm({
+    eventId: current.id,
+    teamId: current.teamId,
+    day,
+    startHour,
+    endHour,
+    originDay,
+    originStart,
+    originEnd,
+  });
+}
+
 function snapHour(hour: number) {
-  return Math.round(hour / SLOT_STEP) * SLOT_STEP;
+  const minutes = Math.round(hour * 60);
+  const snapped = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+  return snapped / 60;
 }
 
 function clampHour(hour: number, min: number, max: number) {
   return Math.min(max, Math.max(min, hour));
+}
+
+function minutesBetween(fromHour: number, toHour: number) {
+  return Math.round((toHour - fromHour) * 60);
 }
 
 function markDirty(teamId?: number) {
@@ -701,13 +846,12 @@ function updateEventPlacement(
 }
 
 function slotKeysForRange(day: string, startHour: number, endHour: number) {
+  // 부원 신청 슬롯(30분)과 비교하기 위해 겹치는 30분 구간을 사용
   const keys: string[] = [];
-  for (
-    let hour = startHour;
-    hour < endHour - 1e-9;
-    hour = Number((hour + SLOT_STEP).toFixed(2))
-  ) {
+  let hour = gridSlotOf(startHour);
+  while (hour < endHour - 1e-9) {
     keys.push(`${day}|${formatTime(hour)}`);
+    hour = Number((hour + GRID_STEP).toFixed(4));
   }
   return keys;
 }
@@ -801,10 +945,10 @@ function onResizeMove(pointerEvent: PointerEvent) {
   const state = resizing.value;
   if (!state || pointerEvent.pointerId !== state.pointerId) return;
 
-  const deltaSlots = Math.round(
-    (pointerEvent.clientY - state.originY) / SLOT_HEIGHT,
-  );
-  const deltaHours = deltaSlots * SLOT_STEP;
+  const deltaMinutes =
+    Math.round((pointerEvent.clientY - state.originY) / PX_PER_MINUTE / SNAP_MINUTES) *
+    SNAP_MINUTES;
+  const deltaHours = deltaMinutes / 60;
 
   let nextStart = state.originStart;
   let nextEnd = state.originEnd;
@@ -813,17 +957,17 @@ function onResizeMove(pointerEvent: PointerEvent) {
     nextStart = clampHour(
       snapHour(state.originStart + deltaHours),
       START_HOUR,
-      state.originEnd - SLOT_STEP,
+      state.originEnd - SNAP_STEP,
     );
   } else {
     nextEnd = clampHour(
       snapHour(state.originEnd + deltaHours),
-      state.originStart + SLOT_STEP,
+      state.originStart + SNAP_STEP,
       END_HOUR,
     );
   }
 
-  if (deltaSlots !== 0) {
+  if (deltaMinutes !== 0) {
     suppressClick.value = true;
   }
 
@@ -893,7 +1037,11 @@ function findCellAtPoint(clientX: number, clientY: number) {
   if (!day || slotRaw == null) return null;
   const slot = Number(slotRaw);
   if (!Number.isFinite(slot)) return null;
-  return { day, slot };
+  const rect = cell.getBoundingClientRect();
+  const offsetRatio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
+  const offsetMinutes =
+    Math.round((offsetRatio * GRID_STEP * 60) / SNAP_MINUTES) * SNAP_MINUTES;
+  return { day, slot, offsetMinutes };
 }
 
 function onMoveMove(pointerEvent: PointerEvent) {
@@ -903,19 +1051,24 @@ function onMoveMove(pointerEvent: PointerEvent) {
   const cell = findCellAtPoint(pointerEvent.clientX, pointerEvent.clientY);
   if (!cell) return;
 
-  const duration = state.duration;
   let nextStart = clampHour(
-    snapHour(cell.slot),
+    snapHour(cell.slot + cell.offsetMinutes / 60),
     START_HOUR,
-    END_HOUR - duration,
+    END_HOUR - state.duration,
   );
-  let nextEnd = nextStart + duration;
-  if (nextEnd > END_HOUR) {
-    nextStart = END_HOUR - duration;
-    nextEnd = nextStart + duration;
+  let nextEnd = nextStart + state.duration;
+  if (nextEnd > END_HOUR + 1e-9) {
+    nextStart = END_HOUR - state.duration;
+    nextEnd = nextStart + state.duration;
+  }
+  if (minutesBetween(nextStart, nextEnd) < SNAP_MINUTES) {
+    return;
   }
 
-  if (cell.day !== state.originDay || nextStart !== state.originStart) {
+  if (
+    cell.day !== state.originDay ||
+    Math.abs(nextStart - state.originStart) > 1e-9
+  ) {
     suppressClick.value = true;
   }
 
