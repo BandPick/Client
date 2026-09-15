@@ -38,6 +38,13 @@
 
           <button type="button"
             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isMatching || isSaving || isLoading || isExporting || !boards.length"
+            @click="exportMatchPdf">
+            {{ isExporting ? "내보내는 중..." : "PDF 내보내기" }}
+          </button>
+
+          <button type="button"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="isMatching || isSaving || isLoading" @click="handleRematch">
             {{ isMatching ? "재배정 중..." : "재배정" }}
           </button>
@@ -601,6 +608,7 @@ const unassignedPool =
 const knownPeople = ref<Map<number, Occupant>>(new Map());
 
 const isDirty = ref(false);
+const isExporting = ref(false);
 
 const scheduleDialogOpen = ref(false);
 const scheduleDialogName = ref("");
@@ -1637,6 +1645,206 @@ async function saveAssignments() {
     );
   } finally {
     isSaving.value = false;
+  }
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildMatchExportDocumentHtml() {
+  const confirmedCount = boards.value.filter((team) => team.confirmed).length;
+  const completeCount = boards.value.filter((team) => team.status === "완료").length;
+
+  const teamSections = boards.value
+    .map((team) => {
+      const slotsHtml = team.slots
+        .map((slot) => {
+          let body = "";
+          if (slot.occupant) {
+            body = `<span class="member">${escapeHtml(slot.occupant.name)}</span>`;
+          } else if (!slot.needed) {
+            body = `<span class="muted">필요없음</span>`;
+          } else {
+            body = `<span class="warn">배정 필요</span>`;
+          }
+          return `
+            <div class="slot">
+              <span class="pos">${escapeHtml(slot.position)}</span>
+              ${body}
+            </div>`;
+        })
+        .join("");
+
+      const noteHtml = team.note
+        ? `<p class="note">${escapeHtml(team.note).replaceAll("\n", "<br />")}</p>`
+        : "";
+
+      return `
+        <section class="team">
+          <div class="team-head">
+            <h2>${escapeHtml(team.name)}</h2>
+            <div class="badges">
+              ${team.confirmed ? `<span class="badge ok">확정</span>` : ""}
+              <span class="badge ${team.status === "완료" ? "ok" : ""}">${escapeHtml(team.status)}</span>
+            </div>
+          </div>
+          ${noteHtml}
+          <div class="slots">${slotsHtml}</div>
+        </section>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>팀 매칭 - 팀제용</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #0f172a;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      font-size: 12px;
+      line-height: 1.5;
+      background: #fff;
+    }
+    header { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #0f172a; }
+    h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+    .sub { margin: 0; color: #64748b; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .team {
+      break-inside: avoid;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      background: #f8fafc;
+    }
+    .team-head { display: flex; justify-content: space-between; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .team-head h2 { margin: 0; font-size: 14px; }
+    .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #e2e8f0;
+      color: #475569;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge.ok { background: #d1fae5; color: #047857; }
+    .note { margin: 0 0 8px; color: #64748b; white-space: pre-wrap; font-size: 11px; }
+    .slots { display: grid; gap: 4px; }
+    .slot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #fff;
+      padding: 6px 8px;
+    }
+    .pos {
+      width: 36px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 2px 0;
+    }
+    .member { font-weight: 600; color: #0f172a; }
+    .muted { color: #94a3b8; }
+    .warn { color: #dc2626; font-weight: 600; }
+    footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 11px; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>팀 매칭 · 팀제용</h1>
+    <p class="sub">팀 ${boards.value.length}개 · 완료 ${completeCount} · 확정 ${confirmedCount}</p>
+  </header>
+  <main class="grid">${teamSections}</main>
+  <footer>BandPick</footer>
+</body>
+</html>`;
+}
+
+async function exportMatchPdf() {
+  if (isExporting.value || !boards.value.length) {
+    return;
+  }
+  isExporting.value = true;
+
+  let iframe: HTMLIFrameElement | null = null;
+
+  try {
+    const html = buildMatchExportDocumentHtml();
+    iframe = document.createElement("iframe");
+    iframe.setAttribute("title", "team-match-pdf-export");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    document.body.appendChild(iframe);
+
+    const frameWindow = iframe.contentWindow;
+    const frameDocument = iframe.contentDocument ?? frameWindow?.document;
+    if (!frameWindow || !frameDocument) {
+      throw new Error("print-frame-unavailable");
+    }
+
+    frameDocument.open();
+    frameDocument.write(html);
+    frameDocument.close();
+
+    await new Promise<void>((resolve) => {
+      const done = () => resolve();
+      if (frameDocument.readyState === "complete") {
+        window.setTimeout(done, 50);
+        return;
+      }
+      iframe?.addEventListener("load", () => window.setTimeout(done, 50), {
+        once: true,
+      });
+      window.setTimeout(done, 400);
+    });
+
+    frameWindow.focus();
+    frameWindow.print();
+  } catch {
+    showAlert(
+      "error",
+      "내보내기 실패",
+      "PDF 내보내기에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    );
+  } finally {
+    if (iframe?.parentNode) {
+      window.setTimeout(() => {
+        iframe?.remove();
+      }, 60_000);
+    }
+    isExporting.value = false;
   }
 }
 
