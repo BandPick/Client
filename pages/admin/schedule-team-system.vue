@@ -169,10 +169,11 @@
               :class="day.isToday ? 'bg-rose-50/40' : 'bg-white hover:bg-slate-50/50'"
               :data-day="day.key"
               :data-slot="slot"
+              :style="{ zIndex: cellZIndex(day.key, slot) }"
             >
               <template v-for="event in getEventsAt(day.key, slot)" :key="event.id">
                 <div
-                  v-if="visibleTeams.includes(event.teamId) && gridSlotOf(event.startHour) === slot"
+                  v-if="visibleTeams.includes(event.teamId) && nearlyEqual(gridSlotOf(event.startHour), slot)"
                   role="button"
                   tabindex="0"
                   class="absolute inset-x-1 z-10 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
@@ -613,6 +614,10 @@ function gridSlotOf(hour: number) {
   return Math.floor((hour + 1e-9) / GRID_STEP) * GRID_STEP;
 }
 
+function nearlyEqual(a: number, b: number) {
+  return Math.abs(a - b) < 1e-9;
+}
+
 function cloneEvents(list: ScheduleEvent[]) {
   return list.map((event) => ({ ...event, members: [...event.members] }));
 }
@@ -655,9 +660,24 @@ function applyBoard(result: ApiBoard, resetVisibility = false) {
 }
 
 function getEventsAt(day: string, hour: number) {
+  // 5분 단위로 칸 중간에 시작해도 해당 30분 칸에서 카드가 보이게 겹침으로 판정
+  const slotEnd = hour + GRID_STEP;
   return events.value.filter(
-    (event) => event.day === day && hour >= event.startHour && hour < event.endHour,
+    (event) =>
+      event.day === day &&
+      event.startHour < slotEnd - 1e-9 &&
+      event.endHour > hour + 1e-9,
   );
+}
+
+function cellZIndex(day: string, slot: number) {
+  const hasStartingEvent = events.value.some(
+    (event) =>
+      visibleTeams.value.includes(event.teamId) &&
+      event.day === day &&
+      Math.abs(gridSlotOf(event.startHour) - slot) < 1e-9,
+  );
+  return hasStartingEvent ? 40 : 1;
 }
 
 function getEventStyle(event: ScheduleEvent) {
