@@ -64,6 +64,14 @@
           <button
             type="button"
             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoading || !events.length || isExporting"
+            @click="exportSchedulePdf"
+          >
+            {{ isExporting ? "내보내는 중..." : "PDF 내보내기" }}
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="isLoading || !events.length"
             @click="enterEditMode"
           >
@@ -468,6 +476,7 @@ const isLoading = ref(false);
 const isEditing = ref(false);
 const isSaving = ref(false);
 const isDirty = ref(false);
+const isExporting = ref(false);
 const errorMessage = ref("");
 const teams = ref<ScheduleTeam[]>([]);
 const events = ref<ScheduleEvent[]>([]);
@@ -1227,6 +1236,189 @@ async function saveScheduleBoard() {
     );
   } finally {
     isSaving.value = false;
+  }
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildExportDocumentHtml() {
+  const visibleEvents = events.value
+    .filter((event) => visibleTeams.value.includes(event.teamId))
+    .slice()
+    .sort((a, b) => {
+      const dayDiff =
+        dayNames.indexOf(a.day as (typeof dayNames)[number]) -
+        dayNames.indexOf(b.day as (typeof dayNames)[number]);
+      if (dayDiff !== 0) return dayDiff;
+      return a.startHour - b.startHour || a.title.localeCompare(b.title, "ko");
+    });
+
+  const daySections = weekDays.value
+    .map((day) => {
+      const dayEvents = visibleEvents.filter((event) => event.day === day.key);
+      const rows =
+        dayEvents.length === 0
+          ? `<p class="empty">일정 없음</p>`
+          : dayEvents
+              .map(
+                (event) => `
+            <article class="event" style="border-left-color:${escapeHtml(event.color)}">
+              <div class="event-top">
+                <strong>${escapeHtml(event.title)}</strong>
+                <span class="time">${escapeHtml(formatTime(event.startHour))} – ${escapeHtml(formatTime(event.endHour))}</span>
+              </div>
+              <p class="members">${escapeHtml(event.members.join(", ") || "멤버 없음")}</p>
+            </article>`,
+              )
+              .join("");
+
+      return `
+        <section class="day">
+          <h2>${escapeHtml(day.name)} <span>${escapeHtml(day.date)}</span></h2>
+          ${rows}
+        </section>`;
+    })
+    .join("");
+
+  const legend = teams.value
+    .filter((team) => visibleTeams.value.includes(team.id))
+    .map(
+      (team) => `
+        <li>
+          <span class="dot" style="background:${escapeHtml(team.color)}"></span>
+          ${escapeHtml(team.name)}
+        </li>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>합주 스케줄 - 팀제용 ${escapeHtml(weekLabel.value)}</title>
+  <style>
+    @page { size: A4; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #0f172a;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      font-size: 12px;
+      line-height: 1.5;
+      background: #fff;
+    }
+    header { margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #0f172a; }
+    h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+    .sub { margin: 0; color: #64748b; font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 14px 0 0; padding: 0; list-style: none; }
+    .legend li { display: inline-flex; align-items: center; gap: 6px; color: #334155; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+    .day { break-inside: avoid; margin: 0 0 18px; }
+    .day h2 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .day h2 span { margin-left: 6px; color: #94a3b8; font-weight: 500; }
+    .event {
+      border: 1px solid #e2e8f0;
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 0 0 8px;
+      background: #f8fafc;
+    }
+    .event-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .event-top strong { font-size: 13px; }
+    .time { color: #475569; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .members { margin: 4px 0 0; color: #64748b; }
+    .empty { margin: 0; color: #94a3b8; }
+    footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 11px; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>합주 스케줄 · 팀제용</h1>
+    <p class="sub">${escapeHtml(weekLabel.value)} · 표시 팀 ${visibleTeams.value.length}개 · 일정 ${visibleEvents.length}건</p>
+    <ul class="legend">${legend}</ul>
+  </header>
+  <main>${daySections}</main>
+  <footer>BandPick</footer>
+</body>
+</html>`;
+}
+
+async function exportSchedulePdf() {
+  if (isExporting.value || !events.value.length) return;
+  isExporting.value = true;
+
+  let iframe: HTMLIFrameElement | null = null;
+
+  try {
+    const html = buildExportDocumentHtml();
+    iframe = document.createElement("iframe");
+    iframe.setAttribute("title", "schedule-pdf-export");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    document.body.appendChild(iframe);
+
+    const frameWindow = iframe.contentWindow;
+    const frameDocument = iframe.contentDocument ?? frameWindow?.document;
+    if (!frameWindow || !frameDocument) {
+      throw new Error("print-frame-unavailable");
+    }
+
+    frameDocument.open();
+    frameDocument.write(html);
+    frameDocument.close();
+
+    await new Promise<void>((resolve) => {
+      const done = () => resolve();
+      if (frameDocument.readyState === "complete") {
+        window.setTimeout(done, 50);
+        return;
+      }
+      iframe?.addEventListener("load", () => window.setTimeout(done, 50), {
+        once: true,
+      });
+      window.setTimeout(done, 400);
+    });
+
+    frameWindow.focus();
+    frameWindow.print();
+  } catch {
+    showAlert(
+      "error",
+      "내보내기 실패",
+      "PDF 내보내기에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    );
+  } finally {
+    if (iframe?.parentNode) {
+      // 인쇄 대화상자가 뜬 뒤 바로 제거하면 일부 브라우저에서 인쇄가 끊길 수 있어 잠시 유지
+      window.setTimeout(() => {
+        iframe?.remove();
+      }, 60_000);
+    }
+    isExporting.value = false;
   }
 }
 
