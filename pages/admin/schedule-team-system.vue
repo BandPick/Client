@@ -8,55 +8,89 @@
         </p>
       </div>
 
-      <div class="relative">
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          @click="isTeamListOpen = !isTeamListOpen"
-        >
-          팀 목록 ({{ visibleTeams.length }})
-          <span class="text-xs">{{ isTeamListOpen ? "▲" : "▼" }}</span>
-        </button>
-
-        <Transition
-          enter-active-class="transition duration-150"
-          enter-from-class="opacity-0 scale-95"
-          enter-to-class="opacity-100 scale-100"
-          leave-active-class="transition duration-100"
-          leave-from-class="opacity-100 scale-100"
-          leave-to-class="opacity-0 scale-95"
-        >
-          <div
-            v-if="isTeamListOpen"
-            class="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative">
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            @click="isTeamListOpen = !isTeamListOpen"
           >
-            <div class="flex flex-col gap-2">
-              <div
-                v-for="team in teams"
-                :key="team.id"
-                class="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 transition hover:bg-slate-50"
-                @click="toggleTeam(team.id)"
-              >
-                <div class="flex items-center gap-2">
-                  <span class="h-2.5 w-2.5 rounded-full" :style="{ background: team.color }" />
-                  <span class="text-sm text-slate-700">
-                    {{ team.name }}
-                  </span>
-                </div>
+            팀 목록 ({{ visibleTeams.length }})
+            <span class="text-xs">{{ isTeamListOpen ? "▲" : "▼" }}</span>
+          </button>
+
+          <Transition
+            enter-active-class="transition duration-150"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition duration-100"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
+          >
+            <div
+              v-if="isTeamListOpen"
+              class="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+            >
+              <div class="flex flex-col gap-2">
                 <div
-                  class="flex h-4 w-4 items-center justify-center rounded border text-[10px]"
-                  :class="
-                    visibleTeams.includes(team.id)
-                      ? 'border-slate-800 bg-slate-800 text-white'
-                      : 'border-slate-300 bg-white'
-                  "
+                  v-for="team in teams"
+                  :key="team.id"
+                  class="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 transition hover:bg-slate-50"
+                  @click="toggleTeam(team.id)"
                 >
-                  <span v-if="visibleTeams.includes(team.id)">✓</span>
+                  <div class="flex items-center gap-2">
+                    <span class="h-2.5 w-2.5 rounded-full" :style="{ background: team.color }" />
+                    <span class="text-sm text-slate-700">
+                      {{ team.name }}
+                    </span>
+                  </div>
+                  <div
+                    class="flex h-4 w-4 items-center justify-center rounded border text-[10px]"
+                    :class="
+                      visibleTeams.includes(team.id)
+                        ? 'border-slate-800 bg-slate-800 text-white'
+                        : 'border-slate-300 bg-white'
+                    "
+                  >
+                    <span v-if="visibleTeams.includes(team.id)">✓</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </Transition>
+          </Transition>
+        </div>
+
+        <template v-if="!isEditing">
+          <button
+            type="button"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoading || !events.length"
+            @click="enterEditMode"
+          >
+            스케줄 수정
+          </button>
+        </template>
+        <template v-else>
+          <span v-if="isDirty" class="text-xs font-medium text-amber-600">
+            저장되지 않은 변경사항이 있습니다
+          </span>
+          <button
+            type="button"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isSaving"
+            @click="cancelEditMode"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!isDirty || isSaving"
+            @click="saveScheduleBoard"
+          >
+            {{ isSaving ? "저장 중..." : "저장" }}
+          </button>
+        </template>
       </div>
     </div>
 
@@ -67,10 +101,18 @@
       {{ errorMessage }}
     </p>
 
+    <p
+      v-if="isEditing"
+      class="mb-3 text-xs text-slate-500"
+    >
+      수정 모드: 카드 위·아래로 시간을 조절하고, 본문을 드래그해 요일/시간을 옮길 수 있습니다.
+    </p>
+
     <div class="mb-3 flex items-center gap-3">
       <button
         type="button"
-        class="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-base hover:bg-slate-50"
+        class="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-base hover:bg-slate-50 disabled:opacity-40"
+        :disabled="isEditing"
         @click="prevWeek"
       >
         ‹
@@ -78,7 +120,8 @@
       <span class="text-sm font-semibold text-slate-700">{{ weekLabel }}</span>
       <button
         type="button"
-        class="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-base hover:bg-slate-50"
+        class="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-base hover:bg-slate-50 disabled:opacity-40"
+        :disabled="isEditing"
         @click="nextWeek"
       >
         ›
@@ -86,7 +129,7 @@
     </div>
 
     <div class="rounded-xl border border-slate-200 bg-white">
-      <div class="max-h-[70vh] overflow-auto">
+      <div ref="boardScrollEl" class="max-h-[70vh] overflow-auto">
         <div class="grid min-w-[640px] grid-cols-[52px_repeat(5,minmax(0,1fr))]">
           <div class="border-b border-slate-200 bg-slate-50" />
 
@@ -124,22 +167,60 @@
               :key="day.key"
               class="relative h-10 border-b border-l border-slate-100"
               :class="day.isToday ? 'bg-rose-50/40' : 'bg-white hover:bg-slate-50/50'"
+              :data-day="day.key"
+              :data-slot="slot"
             >
               <template v-for="event in getEventsAt(day.key, slot)" :key="event.id">
-                <button
+                <div
                   v-if="visibleTeams.includes(event.teamId) && event.startHour === slot"
-                  type="button"
+                  role="button"
+                  tabindex="0"
                   class="absolute inset-x-1 top-0.5 z-10 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
+                  :class="[
+                    isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                    resizing?.eventId === event.id || moving?.eventId === event.id
+                      ? 'z-20 ring-2 ring-slate-400/50 brightness-95'
+                      : '',
+                  ]"
                   :style="getEventStyle(event)"
-                  @click="selectEvent(event)"
+                  @click="onEventClick(event)"
+                  @keydown.enter.prevent="selectEvent(event)"
+                  @pointerdown="onCardPointerDown(event, $event)"
                 >
-                  <div class="flex flex-col gap-0.5 overflow-hidden">
+                  <div
+                    v-if="isEditing"
+                    class="absolute inset-x-0 top-0 z-20 flex h-2.5 cursor-ns-resize items-start justify-center"
+                    title="시작 시간 조절"
+                    @pointerdown.stop.prevent="startResize(event, 'start', $event)"
+                  >
+                    <span
+                      class="mt-0.5 h-0.5 w-6 rounded-full opacity-50"
+                      :style="{ background: event.color }"
+                    />
+                  </div>
+
+                  <div class="flex h-full flex-col gap-0.5 overflow-hidden" :class="isEditing ? 'pt-1' : ''">
                     <span class="truncate text-xs font-semibold">{{ event.title }}</span>
+                    <span class="truncate text-[11px] opacity-75">
+                      {{ formatTime(event.startHour) }} – {{ formatTime(event.endHour) }}
+                    </span>
                     <span class="truncate text-[11px] opacity-75">
                       👥 {{ event.members.join(", ") }}
                     </span>
                   </div>
-                </button>
+
+                  <div
+                    v-if="isEditing"
+                    class="absolute inset-x-0 bottom-0 z-20 flex h-2.5 cursor-ns-resize items-end justify-center"
+                    title="종료 시간 조절"
+                    @pointerdown.stop.prevent="startResize(event, 'end', $event)"
+                  >
+                    <span
+                      class="mb-0.5 h-0.5 w-6 rounded-full opacity-50"
+                      :style="{ background: event.color }"
+                    />
+                  </div>
+                </div>
               </template>
             </div>
           </template>
@@ -205,6 +286,15 @@
         </div>
       </div>
     </Transition>
+
+    <CommonAlertDialog
+      :open="alertOpen"
+      :type="alertType"
+      :title="alertTitle"
+      :message="alertMessage"
+      @close="alertOpen = false"
+      @confirm="alertOpen = false"
+    />
   </div>
 </template>
 
@@ -232,6 +322,7 @@ type ApiTeam = {
 
 type ApiEvent = {
   id: number;
+  scheduleId?: number | null;
   teamId: number;
   title: string;
   day: string;
@@ -246,6 +337,13 @@ type ApiBoard = {
   events: ApiEvent[];
 };
 
+type ApiSaveResponse = {
+  teamCount: number;
+  eventCount: number;
+  message: string;
+  board: ApiBoard;
+};
+
 type ScheduleTeam = {
   id: number;
   name: string;
@@ -254,6 +352,7 @@ type ScheduleTeam = {
 
 type ScheduleEvent = {
   id: number;
+  scheduleId: number | null;
   teamId: number;
   title: string;
   day: string;
@@ -269,12 +368,51 @@ type SelectedScheduleEvent = ScheduleEvent & { dayLabel: string };
 const config = useRuntimeConfig();
 const isTeamListOpen = ref(false);
 const isLoading = ref(false);
+const isEditing = ref(false);
+const isSaving = ref(false);
+const isDirty = ref(false);
 const errorMessage = ref("");
 const teams = ref<ScheduleTeam[]>([]);
 const events = ref<ScheduleEvent[]>([]);
+const snapshotEvents = ref<ScheduleEvent[]>([]);
+const dirtyTeamIds = ref<Set<number>>(new Set());
 const visibleTeams = ref<number[]>([]);
 const selectedEvent = ref<SelectedScheduleEvent | null>(null);
 const weekOffset = ref(0);
+const boardScrollEl = ref<HTMLElement | null>(null);
+
+type ResizeEdge = "start" | "end";
+type ResizeState = {
+  eventId: number;
+  edge: ResizeEdge;
+  originY: number;
+  originStart: number;
+  originEnd: number;
+  pointerId: number;
+};
+type MoveState = {
+  eventId: number;
+  originDay: string;
+  originStart: number;
+  originEnd: number;
+  duration: number;
+  pointerId: number;
+};
+const resizing = ref<ResizeState | null>(null);
+const moving = ref<MoveState | null>(null);
+const suppressClick = ref(false);
+
+const alertOpen = ref(false);
+const alertType = ref<"success" | "error">("error");
+const alertTitle = ref("");
+const alertMessage = ref("");
+
+function showAlert(type: "success" | "error", title: string, message: string) {
+  alertType.value = type;
+  alertTitle.value = title;
+  alertMessage.value = message;
+  alertOpen.value = true;
+}
 
 const dayNames = ["mon", "tue", "wed", "thu", "fri"] as const;
 const dayLabels: Record<string, string> = {
@@ -301,18 +439,24 @@ const scheduleBoardApiUrl = computed(() => {
 const subtitle = computed(() => {
   if (isLoading.value) return "일정을 불러오는 중...";
   if (!teams.value.length) return "저장된 팀제 배정이 없습니다.";
+  if (isEditing.value) return "수정 모드 · 변경 후 저장을 눌러 주세요.";
   return `팀 ${teams.value.length}개 · 일정 ${events.value.length}건`;
+});
+
+const weekStartDate = computed(() => {
+  const now = new Date();
+  const monday = new Date(now);
+  const day = now.getDay() || 7;
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(now.getDate() - day + 1 + weekOffset.value * 7);
+  return monday;
 });
 
 const weekDays = computed(() => {
   const now = new Date();
-  const monday = new Date(now);
-  const day = now.getDay() || 7;
-  monday.setDate(now.getDate() - day + 1 + weekOffset.value * 7);
-
   return dayNames.map((key, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+    const d = new Date(weekStartDate.value);
+    d.setDate(weekStartDate.value.getDate() + i);
     const isToday =
       d.toDateString() === now.toDateString() && weekOffset.value === 0;
     return {
@@ -331,6 +475,14 @@ const weekLabel = computed(() => {
   return `${first.date} – ${last.date}`;
 });
 
+function formatWeekStartIso() {
+  const d = weekStartDate.value;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function parseHour(time: string) {
   const [hourText = "0", minuteText = "0"] = String(time).slice(0, 5).split(":");
   return Number(hourText) + Number(minuteText) / 60;
@@ -345,6 +497,40 @@ function formatTime(hour: number) {
     m = 0;
   }
   return `${String(normalizedHour).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function cloneEvents(list: ScheduleEvent[]) {
+  return list.map((event) => ({ ...event, members: [...event.members] }));
+}
+
+function applyBoard(result: ApiBoard, resetVisibility = false) {
+  const colorByTeamId = new Map<number, string>();
+  teams.value = (result.teams ?? []).map((team, index) => {
+    const color = TEAM_COLORS[index % TEAM_COLORS.length]!;
+    colorByTeamId.set(team.id, color);
+    return {
+      id: team.id,
+      name: team.name,
+      color,
+    };
+  });
+
+  events.value = (result.events ?? []).map((event) => ({
+    id: event.id,
+    scheduleId: event.scheduleId ?? null,
+    teamId: event.teamId,
+    title: event.title,
+    day: event.day,
+    startHour: parseHour(event.startTime),
+    endHour: parseHour(event.endTime),
+    members: event.members ?? [],
+    note: event.note ?? "",
+    color: colorByTeamId.get(event.teamId) ?? TEAM_COLORS[0]!,
+  }));
+
+  if (resetVisibility || !visibleTeams.value.length) {
+    visibleTeams.value = teams.value.map((team) => team.id);
+  }
 }
 
 function getEventsAt(day: string, hour: number) {
@@ -380,12 +566,239 @@ function selectEvent(event: ScheduleEvent) {
   };
 }
 
+function onEventClick(event: ScheduleEvent) {
+  if (suppressClick.value || resizing.value || moving.value) return;
+  if (isEditing.value) return;
+  selectEvent(event);
+}
+
+function snapHour(hour: number) {
+  return Math.round(hour / SLOT_STEP) * SLOT_STEP;
+}
+
+function clampHour(hour: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, hour));
+}
+
+function markDirty(teamId?: number) {
+  isDirty.value = true;
+  if (teamId != null) {
+    dirtyTeamIds.value.add(teamId);
+  }
+}
+
+function updateEventPlacement(
+  eventId: number,
+  day: string,
+  startHour: number,
+  endHour: number,
+) {
+  const index = events.value.findIndex((event) => event.id === eventId);
+  if (index < 0) return;
+  const current = events.value[index]!;
+  if (
+    current.day === day &&
+    current.startHour === startHour &&
+    current.endHour === endHour
+  ) {
+    return;
+  }
+  events.value[index] = {
+    ...current,
+    day,
+    startHour,
+    endHour,
+  };
+  markDirty(current.teamId);
+
+  if (selectedEvent.value?.id === eventId) {
+    const dayInfo = weekDays.value.find((item) => item.key === day);
+    selectedEvent.value = {
+      ...selectedEvent.value,
+      day,
+      startHour,
+      endHour,
+      dayLabel: dayInfo ? `${dayInfo.name} (${dayInfo.date})` : "",
+    };
+  }
+}
+
+function startResize(event: ScheduleEvent, edge: ResizeEdge, pointerEvent: PointerEvent) {
+  if (!isEditing.value) return;
+  resizing.value = {
+    eventId: event.id,
+    edge,
+    originY: pointerEvent.clientY,
+    originStart: event.startHour,
+    originEnd: event.endHour,
+    pointerId: pointerEvent.pointerId,
+  };
+  suppressClick.value = false;
+  window.addEventListener("pointermove", onResizeMove);
+  window.addEventListener("pointerup", onResizeEnd);
+  window.addEventListener("pointercancel", onResizeEnd);
+}
+
+function onResizeMove(pointerEvent: PointerEvent) {
+  const state = resizing.value;
+  if (!state || pointerEvent.pointerId !== state.pointerId) return;
+
+  const deltaSlots = Math.round(
+    (pointerEvent.clientY - state.originY) / SLOT_HEIGHT,
+  );
+  const deltaHours = deltaSlots * SLOT_STEP;
+
+  let nextStart = state.originStart;
+  let nextEnd = state.originEnd;
+
+  if (state.edge === "start") {
+    nextStart = clampHour(
+      snapHour(state.originStart + deltaHours),
+      START_HOUR,
+      state.originEnd - SLOT_STEP,
+    );
+  } else {
+    nextEnd = clampHour(
+      snapHour(state.originEnd + deltaHours),
+      state.originStart + SLOT_STEP,
+      END_HOUR,
+    );
+  }
+
+  if (deltaSlots !== 0) {
+    suppressClick.value = true;
+  }
+
+  const current = events.value.find((event) => event.id === state.eventId);
+  if (!current) return;
+  updateEventPlacement(state.eventId, current.day, nextStart, nextEnd);
+}
+
+function onResizeEnd(pointerEvent: PointerEvent) {
+  const state = resizing.value;
+  if (!state || pointerEvent.pointerId !== state.pointerId) return;
+
+  resizing.value = null;
+  window.removeEventListener("pointermove", onResizeMove);
+  window.removeEventListener("pointerup", onResizeEnd);
+  window.removeEventListener("pointercancel", onResizeEnd);
+
+  if (suppressClick.value) {
+    window.setTimeout(() => {
+      suppressClick.value = false;
+    }, 0);
+  }
+}
+
+function onCardPointerDown(event: ScheduleEvent, pointerEvent: PointerEvent) {
+  if (!isEditing.value) return;
+  if (pointerEvent.button !== 0) return;
+  const target = pointerEvent.target as HTMLElement | null;
+  if (target?.closest("[title='시작 시간 조절'], [title='종료 시간 조절']")) {
+    return;
+  }
+
+  moving.value = {
+    eventId: event.id,
+    originDay: event.day,
+    originStart: event.startHour,
+    originEnd: event.endHour,
+    duration: event.endHour - event.startHour,
+    pointerId: pointerEvent.pointerId,
+  };
+  suppressClick.value = false;
+  window.addEventListener("pointermove", onMoveMove);
+  window.addEventListener("pointerup", onMoveEnd);
+  window.addEventListener("pointercancel", onMoveEnd);
+}
+
+function findCellAtPoint(clientX: number, clientY: number) {
+  const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+  const cell = el?.closest("[data-day][data-slot]") as HTMLElement | null;
+  if (!cell) return null;
+  const day = cell.dataset.day;
+  const slotRaw = cell.dataset.slot;
+  if (!day || slotRaw == null) return null;
+  const slot = Number(slotRaw);
+  if (!Number.isFinite(slot)) return null;
+  return { day, slot };
+}
+
+function onMoveMove(pointerEvent: PointerEvent) {
+  const state = moving.value;
+  if (!state || pointerEvent.pointerId !== state.pointerId) return;
+
+  const cell = findCellAtPoint(pointerEvent.clientX, pointerEvent.clientY);
+  if (!cell) return;
+
+  const duration = state.duration;
+  let nextStart = clampHour(
+    snapHour(cell.slot),
+    START_HOUR,
+    END_HOUR - duration,
+  );
+  const nextEnd = nextStart + duration;
+  if (nextEnd > END_HOUR) {
+    nextStart = END_HOUR - duration;
+  }
+
+  if (cell.day !== state.originDay || nextStart !== state.originStart) {
+    suppressClick.value = true;
+  }
+
+  updateEventPlacement(state.eventId, cell.day, nextStart, nextEnd);
+}
+
+function onMoveEnd(pointerEvent: PointerEvent) {
+  const state = moving.value;
+  if (!state || pointerEvent.pointerId !== state.pointerId) return;
+
+  moving.value = null;
+  window.removeEventListener("pointermove", onMoveMove);
+  window.removeEventListener("pointerup", onMoveEnd);
+  window.removeEventListener("pointercancel", onMoveEnd);
+
+  if (suppressClick.value) {
+    window.setTimeout(() => {
+      suppressClick.value = false;
+    }, 0);
+  }
+}
+
+function enterEditMode() {
+  snapshotEvents.value = cloneEvents(events.value);
+  dirtyTeamIds.value = new Set();
+  isEditing.value = true;
+  isDirty.value = false;
+  selectedEvent.value = null;
+  errorMessage.value = "";
+}
+
+async function cancelEditMode() {
+  events.value = cloneEvents(snapshotEvents.value);
+  dirtyTeamIds.value = new Set();
+  isEditing.value = false;
+  isDirty.value = false;
+  resizing.value = null;
+  moving.value = null;
+}
+
 function prevWeek() {
+  if (isEditing.value) return;
   weekOffset.value -= 1;
 }
 
 function nextWeek() {
+  if (isEditing.value) return;
   weekOffset.value += 1;
+}
+
+function extractApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === "string" && data.trim()) return data;
+  }
+  return fallback;
 }
 
 async function loadScheduleBoard() {
@@ -396,31 +809,7 @@ async function loadScheduleBoard() {
     const result = await $fetch<ApiBoard>(scheduleBoardApiUrl.value, {
       method: "GET",
     });
-
-    const colorByTeamId = new Map<number, string>();
-    teams.value = (result.teams ?? []).map((team, index) => {
-      const color = TEAM_COLORS[index % TEAM_COLORS.length]!;
-      colorByTeamId.set(team.id, color);
-      return {
-        id: team.id,
-        name: team.name,
-        color,
-      };
-    });
-
-    events.value = (result.events ?? []).map((event) => ({
-      id: event.id,
-      teamId: event.teamId,
-      title: event.title,
-      day: event.day,
-      startHour: parseHour(event.startTime),
-      endHour: parseHour(event.endTime),
-      members: event.members ?? [],
-      note: event.note ?? "",
-      color: colorByTeamId.get(event.teamId) ?? TEAM_COLORS[0]!,
-    }));
-
-    visibleTeams.value = teams.value.map((team) => team.id);
+    applyBoard(result, true);
   } catch {
     teams.value = [];
     events.value = [];
@@ -432,7 +821,67 @@ async function loadScheduleBoard() {
   }
 }
 
+async function saveScheduleBoard() {
+  if (!isDirty.value || isSaving.value) return;
+  isSaving.value = true;
+  errorMessage.value = "";
+
+  try {
+    const dirtyIds = dirtyTeamIds.value;
+    const response = await $fetch<ApiSaveResponse>(scheduleBoardApiUrl.value, {
+      method: "PUT",
+      body: {
+        weekStartDate: formatWeekStartIso(),
+        events: events.value
+          .filter((event) => dirtyIds.has(event.teamId))
+          .map((event) => ({
+            teamId: event.teamId,
+            day: event.day,
+            startTime: formatTime(event.startHour),
+            endTime: formatTime(event.endHour),
+          })),
+      },
+    });
+
+    applyBoard(response.board ?? { teams: [], events: [] });
+    snapshotEvents.value = cloneEvents(events.value);
+    dirtyTeamIds.value = new Set();
+    isDirty.value = false;
+    isEditing.value = false;
+    showAlert(
+      "success",
+      "저장 완료",
+      response.message ||
+        `팀 ${response.teamCount}개, 일정 ${response.eventCount}건을 저장했습니다.`,
+    );
+  } catch (error) {
+    showAlert(
+      "error",
+      "저장 실패",
+      extractApiErrorMessage(
+        error,
+        "스케줄 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      ),
+    );
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+function clearInteractionListeners() {
+  window.removeEventListener("pointermove", onResizeMove);
+  window.removeEventListener("pointerup", onResizeEnd);
+  window.removeEventListener("pointercancel", onResizeEnd);
+  window.removeEventListener("pointermove", onMoveMove);
+  window.removeEventListener("pointerup", onMoveEnd);
+  window.removeEventListener("pointercancel", onMoveEnd);
+}
+
 onMounted(() => {
   loadScheduleBoard();
+});
+
+onBeforeUnmount(() => {
+  clearInteractionListeners();
 });
 </script>
