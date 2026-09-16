@@ -1538,7 +1538,7 @@ function removeFromPool(
   }
 }
 
-/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·보컬 겸임을 허용 */
+/* 슬롯으로 드롭: 다른 팀/세션으로 복사(보컬은 1팀만, 같은 팀 보컬+악기 겸임 허용) */
 function onDropToSlot(
   event: DragEvent,
   teamIndex: number,
@@ -1583,6 +1583,22 @@ function onDropToSlot(
     assignedTeamCount(payload.occupant.userId) >= maxTeamsFor(payload.occupant.userId)
   ) {
     showMaxTeamAlert(payload.occupant.name, maxTeamsFor(payload.occupant.userId));
+    dragPayload.value = null;
+    return;
+  }
+
+  if (
+    violatesVocalOneTeamRule(
+      payload.occupant.userId,
+      teamIndex,
+      targetSlot.position,
+    )
+  ) {
+    showAlert(
+      "error",
+      "보컬 1팀 제한",
+      `${payload.occupant.name} 님은 보컬로 배정되면 1개 팀에만 소속될 수 있습니다.`,
+    );
     dragPayload.value = null;
     return;
   }
@@ -1845,6 +1861,9 @@ function maxTeamsFor(userId: number) {
 }
 
 function remainingTeamsFor(userId: number) {
+  if (isSeatedAsVocalAnywhere(userId)) {
+    return 0;
+  }
   return Math.max(0, maxTeamsFor(userId) - assignedTeamCount(userId));
 }
 
@@ -1861,6 +1880,37 @@ function assignedPositionsInTeam(userId: number, teamIndex: number) {
 /** 보컬(V1/V2) + 악기 한 자리만 한 팀에서 세션 겸임 허용 */
 function isVocalPosition(position: string) {
   return position === "V" || position === "V1" || position === "V2";
+}
+
+function isSeatedAsVocalAnywhere(userId: number) {
+  return boards.value.some((team) =>
+    team.slots.some(
+      (slot) =>
+        slot.occupant?.userId === userId && isVocalPosition(slot.position),
+    ),
+  );
+}
+
+/** 보컬 배정 시 다른 팀 소속 불가 (같은 팀 보컬+악기 겸임은 허용) */
+function violatesVocalOneTeamRule(
+  userId: number,
+  targetTeamIndex: number,
+  targetPosition: string,
+) {
+  const otherPositions = boards.value.flatMap((team, ti) =>
+    ti === targetTeamIndex
+      ? []
+      : team.slots
+          .filter((slot) => slot.occupant?.userId === userId)
+          .map((slot) => slot.position),
+  );
+  if (!otherPositions.length) {
+    return false;
+  }
+  if (isVocalPosition(targetPosition)) {
+    return true;
+  }
+  return otherPositions.some((position) => isVocalPosition(position));
 }
 
 function canConcurrentAssign(
