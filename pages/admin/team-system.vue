@@ -31,7 +31,36 @@
           </h2>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 합주 가능 요일 조회 -->
+          <div
+            class="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm"
+            title="선택한 요일 모두에 합주 가능한 인원을 조회합니다"
+          >
+            <span class="mr-1 text-xs font-medium text-slate-500">가능 요일</span>
+            <label
+              v-for="day in TEAM_WEEKDAYS"
+              :key="`dash-day-${day}`"
+              class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-slate-700 transition hover:bg-slate-50"
+            >
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5 rounded border-slate-300 text-slate-800 focus:ring-slate-400"
+                :checked="dashboardDayFilter.includes(day)"
+                @change="toggleDashboardDayFilter(day)"
+              />
+              <span>{{ day }}</span>
+            </label>
+            <button
+              type="button"
+              class="ml-1 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="!dashboardDayFilter.length"
+              @click="openDayAvailabilityPopup"
+            >
+              조회
+            </button>
+          </div>
+
           <span v-if="isDirty" class="text-xs font-medium text-amber-600">
             저장되지 않은 변경사항이 있습니다
           </span>
@@ -237,6 +266,12 @@
         <div>
           <h2 class="text-lg font-semibold text-slate-900">
             제출 현황
+            <span class="ml-1.5 text-sm font-medium text-slate-500">
+              ({{ filteredRows.length }}명
+              <template v-if="filteredRows.length !== rows.length">
+                / 전체 {{ rows.length }}명
+              </template>)
+            </span>
           </h2>
 
           <p class="mt-1 text-xs text-slate-500">
@@ -277,7 +312,7 @@
             <option value="all">
               세션 전체
             </option>
-            <option v-for="position in POSITION_LIST" :key="`session-filter-${position}`" :value="position">
+            <option v-for="position in FORM_POSITION_LIST" :key="`session-filter-${position}`" :value="position">
               {{ position }}
             </option>
           </select>
@@ -439,13 +474,84 @@
     <AdminMemberScheduleDialog :open="scheduleDialogOpen" :member-name="scheduleDialogName"
       :schedules="scheduleDialogSlots" @close="scheduleDialogOpen = false" />
 
+    <!-- 요일별 합주 가능 인원 조회 팝업 -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-150 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="dayAvailabilityOpen"
+          class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
+          @click.self="dayAvailabilityOpen = false"
+        >
+          <div class="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4">
+              <div>
+                <h2 class="text-lg font-bold text-slate-900">합주 가능 인원</h2>
+                <p class="mt-1 text-sm text-slate-500">
+                  {{ dashboardDayFilter.join("·") }} · {{ dayAvailabilityRows.length }}명
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-sm text-slate-500 hover:bg-slate-200"
+                @click="dayAvailabilityOpen = false"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div class="overflow-y-auto px-6 py-4">
+              <p v-if="!dayAvailabilityRows.length" class="py-8 text-center text-sm text-slate-400">
+                선택한 요일에 합주 가능한 제출 인원이 없습니다.
+              </p>
+              <ul v-else class="divide-y divide-slate-100">
+                <li
+                  v-for="row in dayAvailabilityRows"
+                  :key="row.userId"
+                  class="flex items-start justify-between gap-3 py-3"
+                >
+                  <div class="min-w-0">
+                    <p class="font-semibold text-slate-900">
+                      {{ row.name }}
+                      <span class="ml-1 text-xs font-medium text-slate-400">
+                        잔여 {{ remainingTeamsFor(row.userId) }}팀
+                      </span>
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                      {{ row.positions.join(", ") || "포지션 없음" }}
+                    </p>
+                  </div>
+                  <button
+                    v-if="row.schedules.length"
+                    type="button"
+                    class="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                    @click="openSchedule(row)"
+                  >
+                    스케줄
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <CommonAlertDialog :open="alertOpen" :type="alertType" :title="alertTitle" :message="alertMessage"
       @close="alertOpen = false" @confirm="alertOpen = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { groupTeamScheduleRanges } from "~/utils/teamForm";
+import { groupTeamScheduleRanges, TEAM_WEEKDAYS } from "~/utils/teamForm";
+
+type TeamWeekday = (typeof TEAM_WEEKDAYS)[number];
 
 definePageMeta({
   layout: "admin",
@@ -536,6 +642,17 @@ type MatchResult = {
  * ========================================================= */
 
 const POSITION_LIST = [
+  "V1",
+  "V2",
+  "D",
+  "B",
+  "EG1",
+  "EG2",
+  "K",
+] as const;
+
+/** 부원 신청서 기준 세션 (보드 좌석 V1/V2와 구분) */
+const FORM_POSITION_LIST = [
   "V",
   "D",
   "B",
@@ -544,7 +661,7 @@ const POSITION_LIST = [
   "K",
 ] as const;
 
-const OPTIONAL_POSITIONS = new Set<string>(["K"]);
+const OPTIONAL_POSITIONS = new Set<string>(["K", "V2"]);
 
 const TEAM_BOARD_NAMES = [
   "A팀",
@@ -598,7 +715,11 @@ const statusFilter = ref<
   "all" | "submitted" | "pending"
 >("all");
 
-const sessionFilter = ref<(typeof POSITION_LIST)[number] | "all">("all");
+const sessionFilter = ref<(typeof FORM_POSITION_LIST)[number] | "all">("all");
+
+/** 대시보드: 합주 가능 요일 조회 */
+const dashboardDayFilter = ref<TeamWeekday[]>([]);
+const dayAvailabilityOpen = ref(false);
 
 const boards = ref<Board[]>([]);
 
@@ -693,8 +814,42 @@ const filteredRows = computed(() => {
   });
 });
 
+const dayAvailabilityRows = computed(() => {
+  const selectedDays = dashboardDayFilter.value;
+  if (!selectedDays.length) {
+    return [];
+  }
+  return rows.value
+    .filter((row) => row.submitted && rowAvailableOnDays(row, selectedDays))
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+});
+
 function rowHasSession(row: SubmissionRow, session: string) {
   return Object.prototype.hasOwnProperty.call(row.positionLevels, session);
+}
+
+function toggleDashboardDayFilter(day: TeamWeekday) {
+  if (dashboardDayFilter.value.includes(day)) {
+    dashboardDayFilter.value = dashboardDayFilter.value.filter((item) => item !== day);
+  } else {
+    dashboardDayFilter.value = [...dashboardDayFilter.value, day];
+  }
+}
+
+function openDayAvailabilityPopup() {
+  if (!dashboardDayFilter.value.length) {
+    return;
+  }
+  dayAvailabilityOpen.value = true;
+}
+
+/** 선택한 요일 각각에 합주 가능 슬롯이 하나 이상 있는지 (AND) */
+function rowAvailableOnDays(row: SubmissionRow, days: TeamWeekday[]) {
+  if (!days.length) return true;
+  const availableDays = new Set(
+    row.schedules.map((slot) => String(slot.dayOfWeek ?? "").trim()),
+  );
+  return days.every((day) => availableDays.has(day));
 }
 
 function isFilteredSessionBadge(label: string) {
@@ -884,12 +1039,23 @@ function buildBoardsFromMatchResult(
  * ========================================================= */
 
 function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): Board {
-  const byPosition = new Map(
-    team.members.map((member) => [member.session, member] as const),
-  );
-  const neededByPosition = team.neededByPosition ?? {};
+  const byPosition = new Map<string, MatchMember>();
+  for (const member of team.members) {
+    let session = member.session === "V" ? "V1" : member.session;
+    if (session === "V1" && byPosition.has("V1") && !byPosition.has("V2")) {
+      session = "V2";
+    }
+    byPosition.set(session, member);
+  }
+  const neededByPosition = { ...(team.neededByPosition ?? {}) };
+  // 보컬 1명(또는 V2 비어 있음)이면 V2는 자동 필요없음
+  if (!byPosition.has("V2")) {
+    neededByPosition.V2 = false;
+  } else {
+    neededByPosition.V2 = true;
+  }
 
-  return {
+  const board: Board = {
     name,
     status: team.status,
     note: team.note,
@@ -903,6 +1069,22 @@ function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): B
       };
     }),
   };
+  applyVocalNeededRules(board);
+  return board;
+}
+
+/** 팀당 보컬 1명이 기본. V2에 사람이 없으면 필요없음 처리. */
+function applyVocalNeededRules(board: Board) {
+  const v2 = board.slots.find((slot) => slot.position === "V2");
+  if (!v2) {
+    return;
+  }
+  if (v2.occupant) {
+    v2.needed = true;
+  } else {
+    v2.needed = false;
+    v2.occupant = null;
+  }
 }
 
 function lockedTeamsPayload() {
@@ -1277,7 +1459,7 @@ function onDropToSlot(
     showAlert(
       "error",
       "세션 겸임 불가",
-      `${payload.occupant.name} 님은 보컬(V)과 악기 한 자리만 겸임할 수 있습니다.`,
+      `${payload.occupant.name} 님은 보컬(V1/V2)과 악기 한 자리만 겸임할 수 있습니다.`,
     );
     dragPayload.value = null;
     return;
@@ -1363,9 +1545,16 @@ function setSlotNeeded(teamIndex: number, slotIndex: number, needed: boolean) {
   isDirty.value = true;
 }
 
+function skillPosition(position: string) {
+  if (position === "V1" || position === "V2") {
+    return "V";
+  }
+  return position;
+}
+
 function levelForPosition(userId: number, position: string) {
   const row = rows.value.find((item) => item.userId === userId);
-  const level = row?.positionLevels?.[position];
+  const level = row?.positionLevels?.[skillPosition(position)];
   return level && level.trim() ? level : "-";
 }
 
@@ -1385,6 +1574,7 @@ function refreshBoardStatus(teamIndex: number) {
   if (!team) {
     return;
   }
+  applyVocalNeededRules(team);
   const hasMember = team.slots.some((slot) => slot.occupant);
   const complete = team.slots.every((slot) => !slot.needed || slot.occupant);
   team.status = hasMember && complete ? "완료" : "대기";
@@ -1496,7 +1686,11 @@ function assignedPositionsInTeam(userId: number, teamIndex: number) {
     .map((slot) => slot.position);
 }
 
-/** 보컬(V) + 악기 한 자리만 한 팀에서 세션 겸임 허용 */
+/** 보컬(V1/V2) + 악기 한 자리만 한 팀에서 세션 겸임 허용 */
+function isVocalPosition(position: string) {
+  return position === "V" || position === "V1" || position === "V2";
+}
+
 function canConcurrentAssign(
   currentPositions: string[],
   nextPosition: string,
@@ -1508,7 +1702,8 @@ function canConcurrentAssign(
   if (positions.length > 2) {
     return false;
   }
-  return positions.includes("V") && positions.some((position) => position !== "V");
+  const vocalCount = positions.filter((position) => isVocalPosition(position)).length;
+  return vocalCount === 1 && positions.some((position) => !isVocalPosition(position));
 }
 
 function showMaxTeamAlert(name: string, maxTeams: number) {
@@ -1853,7 +2048,7 @@ async function exportMatchPdf() {
  * ========================================================= */
 
 function emptyBoard(name: string): Board {
-  return {
+  const board: Board = {
     name,
     status: "대기",
     note: "",
@@ -1864,6 +2059,8 @@ function emptyBoard(name: string): Board {
       needed: !OPTIONAL_POSITIONS.has(position),
     })),
   };
+  applyVocalNeededRules(board);
+  return board;
 }
 
 function ensureTeamBoards() {
