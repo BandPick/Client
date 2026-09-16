@@ -35,28 +35,17 @@
           <!-- 합주 가능 요일 조회 -->
           <div
             class="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm"
-            title="선택한 요일 모두에 합주 가능한 인원을 조회합니다"
-          >
+            title="선택한 요일 모두에 합주 가능한 인원을 조회합니다">
             <span class="mr-1 text-xs font-medium text-slate-500">가능 요일</span>
-            <label
-              v-for="day in TEAM_WEEKDAYS"
-              :key="`dash-day-${day}`"
-              class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-slate-700 transition hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5 rounded border-slate-300 text-slate-800 focus:ring-slate-400"
-                :checked="dashboardDayFilter.includes(day)"
-                @change="toggleDashboardDayFilter(day)"
-              />
+            <label v-for="day in TEAM_WEEKDAYS" :key="`dash-day-${day}`"
+              class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-slate-700 transition hover:bg-slate-50">
+              <input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-slate-800 focus:ring-slate-400"
+                :checked="dashboardDayFilter.includes(day)" @change="toggleDashboardDayFilter(day)" />
               <span>{{ day }}</span>
             </label>
-            <button
-              type="button"
+            <button type="button"
               class="ml-1 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="!dashboardDayFilter.length"
-              @click="openDayAvailabilityPopup"
-            >
+              :disabled="!dashboardDayFilter.length" @click="openDayAvailabilityPopup">
               조회
             </button>
           </div>
@@ -67,8 +56,7 @@
 
           <button type="button"
             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="isMatching || isSaving || isLoading || isExporting || !boards.length"
-            @click="exportMatchPdf">
+            :disabled="isMatching || isSaving || isLoading || isExporting || !boards.length" @click="exportMatchPdf">
             {{ isExporting ? "내보내는 중..." : "PDF 내보내기" }}
           </button>
 
@@ -93,7 +81,8 @@
 
       <!-- 배정 가능 인원: 남은 참여 팀 수가 있는 부원. 한 팀에 들어가도 여유가 있으면 여기에 남음 -->
       <div v-if="boards.length || unassignedPool.length"
-        class="sticky top-16 z-20 mb-4 rounded-xl border-2 border-dashed bg-slate-50/95 p-3 shadow-sm backdrop-blur-sm transition" :class="{
+        class="sticky top-16 z-20 mb-4 rounded-xl border-2 border-dashed bg-slate-50/95 p-3 shadow-sm backdrop-blur-sm transition"
+        :class="{
           'border-blue-400 bg-blue-50/95': dropTarget === 'pool',
           'border-slate-300': dropTarget !== 'pool',
         }" @dragover.prevent="dropTarget = 'pool'" @dragleave="onPoolDragLeave" @drop="onDropToPool">
@@ -126,52 +115,52 @@
 
       <!-- 팀 카드: PC 한 줄 3팀, 한 화면에서 전체 표시 -->
       <div v-if="boards.length" class="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <article v-for="(team, teamIndex) in boards" :key="team.name"
-              class="min-w-0 rounded-xl border bg-white p-4 shadow-sm" :class="team.confirmed
-                ? 'border-emerald-300 ring-1 ring-emerald-100'
-                : 'border-slate-200'">
-              <!-- 팀 헤더 -->
-              <div class="flex items-center justify-between gap-2">
-                <h3 class="font-semibold text-slate-900">
-                  {{ team.name }}
-                </h3>
+        <article v-for="(team, teamIndex) in boards" :key="team.name"
+          class="min-w-0 rounded-xl border bg-white p-4 shadow-sm" :class="team.confirmed
+            ? 'border-emerald-300 ring-1 ring-emerald-100'
+            : 'border-slate-200'">
+          <!-- 팀 헤더 -->
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="font-semibold text-slate-900">
+              {{ team.name }}
+            </h3>
 
-                <div class="flex shrink-0 items-center gap-1.5">
-                  <span v-if="team.confirmed"
-                    class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                    확정
-                  </span>
-                  <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="team.status === '완료'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-slate-100 text-slate-600'">
-                    {{ team.status }}
-                  </span>
-                </div>
-              </div>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <span v-if="team.confirmed"
+                class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                확정
+              </span>
+              <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="team.status === '완료'
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-slate-100 text-slate-600'">
+                {{ team.status }}
+              </span>
+            </div>
+          </div>
 
-              <p v-if="team.note" class="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-500">
-                {{ team.note }}
-              </p>
+          <p v-if="team.note" class="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-500">
+            {{ team.note }}
+          </p>
 
-              <!-- 포지션 슬롯 -->
-              <div class="mt-3 space-y-1.5">
-                <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
-                  class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition" :class="{
-                    'border-blue-400 bg-blue-50':
-                      !team.confirmed &&
-                      dropTarget === `${teamIndex}-${slotIndex}`,
-                    'border-slate-100 bg-slate-50':
-                      !slot.needed &&
-                      !slot.occupant &&
-                      dropTarget !== `${teamIndex}-${slotIndex}`,
-                    'border-slate-200':
-                      slot.needed ||
-                      slot.occupant ||
-                      dropTarget === `${teamIndex}-${slotIndex}`,
-                    'opacity-90': team.confirmed,
-                  }" @dragover.prevent="
-                    !team.confirmed && (dropTarget = `${teamIndex}-${slotIndex}`)
-                    " @dragleave="
+          <!-- 포지션 슬롯 -->
+          <div class="mt-3 space-y-1.5">
+            <div v-for="(slot, slotIndex) in team.slots" :key="slot.position"
+              class="flex items-center gap-2 rounded-md border bg-white px-2 py-1.5 transition" :class="{
+                'border-blue-400 bg-blue-50':
+                  !team.confirmed &&
+                  dropTarget === `${teamIndex}-${slotIndex}`,
+                'border-slate-100 bg-slate-50':
+                  !slot.needed &&
+                  !slot.occupant &&
+                  dropTarget !== `${teamIndex}-${slotIndex}`,
+                'border-slate-200':
+                  slot.needed ||
+                  slot.occupant ||
+                  dropTarget === `${teamIndex}-${slotIndex}`,
+                'opacity-90': team.confirmed,
+              }" @dragover.prevent="
+                !team.confirmed && (dropTarget = `${teamIndex}-${slotIndex}`)
+                " @dragleave="
                       onSlotDragLeave(teamIndex, slotIndex)
                       " @drop="
                         onDropToSlot(
@@ -180,93 +169,82 @@
                           slotIndex
                         )
                         ">
-                  <!-- 포지션: 클릭 시 이 자리만 고정 (재배정 시 유지) -->
-                  <button
-                    type="button"
-                    class="w-12 shrink-0 rounded px-1 py-1 text-center text-xs font-semibold transition"
-                    :class="slotButtonClass(team, slot)"
-                    :disabled="team.confirmed || !slot.occupant"
-                    :title="slotPinTitle(team, slot)"
-                    @mousedown.stop
-                    @click.stop="toggleSlotPinned(teamIndex, slotIndex)"
-                  >
-                    {{ slot.position }}
-                  </button>
+              <!-- 포지션: 클릭 시 이 자리만 고정 (재배정 시 유지) -->
+              <button type="button" class="w-12 shrink-0 rounded px-1 py-1 text-center text-xs font-semibold transition"
+                :class="slotButtonClass(team, slot)" :disabled="team.confirmed || !slot.occupant"
+                :title="slotPinTitle(team, slot)" @mousedown.stop @click.stop="toggleSlotPinned(teamIndex, slotIndex)">
+                {{ slot.position }}
+              </button>
 
-                  <!-- 배정된 사람 -->
-                  <span v-if="slot.occupant"
-                    class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                    <span
-                      :draggable="!team.confirmed && !slot.pinned"
-                      class="min-w-0 flex-1 whitespace-nowrap select-none"
-                      :class="{
-                      'cursor-grab active:cursor-grabbing': !team.confirmed && !slot.pinned,
-                      'cursor-default': team.confirmed || slot.pinned,
-                      'opacity-30': draggingUserId === slot.occupant.userId,
-                    }" @dragstart="
-                      !team.confirmed && !slot.pinned && onDragStart(
-                        $event,
-                        {
-                          origin: 'slot',
-                          teamIndex: teamIndex,
-                          slotIndex,
-                        },
-                        slot.occupant
-                      )
-                      " @dragend="onDragEnd">
-                      {{ memberLabel(slot.occupant.name, slot.occupant.userId) }}
-                      <span class="ml-1.5 text-xs text-slate-600">
-                        {{ levelForPosition(slot.occupant.userId, slot.position) }}
-                      </span>
-                      <span
-                        v-if="slot.pinned && !team.confirmed"
-                        class="ml-1 text-[10px] font-semibold text-amber-800"
-                      >고정</span>
-                    </span>
-
-                    <button v-if="!team.confirmed && !slot.pinned" type="button"
-                      class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
-                      title="배정 해제" @mousedown.stop
-                      @click.stop="unassign(teamIndex, slotIndex)">
-                      ✕
-                    </button>
+              <!-- 배정된 사람 -->
+              <span v-if="slot.occupant"
+                class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
+                <span :draggable="!team.confirmed && !slot.pinned" class="min-w-0 flex-1 whitespace-nowrap select-none"
+                  :class="{
+                    'cursor-grab active:cursor-grabbing': !team.confirmed && !slot.pinned,
+                    'cursor-default': team.confirmed || slot.pinned,
+                    'opacity-30': draggingUserId === slot.occupant.userId,
+                  }" @dragstart="
+                    !team.confirmed && !slot.pinned && onDragStart(
+                      $event,
+                      {
+                        origin: 'slot',
+                        teamIndex: teamIndex,
+                        slotIndex,
+                      },
+                      slot.occupant
+                    )
+                    " @dragend="onDragEnd">
+                  {{ memberLabel(slot.occupant.name, slot.occupant.userId) }}
+                  <span class="ml-1.5 text-xs text-slate-600">
+                    {{ levelForPosition(slot.occupant.userId, slot.position) }}
                   </span>
+                  <span v-if="slot.pinned && !team.confirmed"
+                    class="ml-1 text-[10px] font-semibold text-amber-800">고정</span>
+                </span>
 
-                  <!-- 필요없음 -->
-                  <span v-else-if="!slot.needed"
-                    class="flex min-w-0 flex-1 items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-400">
-                    필요없음
-                  </span>
-
-                  <!-- 빈 슬롯 -->
-                  <span v-else
-                    class="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-400">
-                    배정 필요
-                  </span>
-
-                  <button v-if="!team.confirmed" type="button"
-                    class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition" :class="slot.needed
-                      ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                      : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
-                    :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'" @mousedown.stop
-                    @click.stop="setSlotNeeded(teamIndex, slotIndex, !slot.needed)">
-                    {{ slot.needed ? "필요없음" : "필요" }}
-                  </button>
-                  <span v-else class="w-14 shrink-0" />
-                </div>
-              </div>
-
-              <div class="mt-4 border-t border-slate-100 pt-3">
-                <button type="button"
-                  class="w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
-                  :class="team.confirmed
-                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700'" :disabled="isMatching || isSaving"
-                  @click="toggleTeamConfirmed(teamIndex)">
-                  {{ team.confirmed ? "확정 해제" : "확정" }}
+                <button v-if="!team.confirmed && !slot.pinned" type="button"
+                  class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
+                  title="배정 해제" @mousedown.stop @click.stop="unassign(teamIndex, slotIndex)">
+                  ✕
                 </button>
-              </div>
-            </article>
+              </span>
+
+              <!-- 필요없음 -->
+              <span v-else-if="!slot.needed"
+                class="flex min-w-0 flex-1 items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-400">
+                필요없음
+              </span>
+
+              <!-- 빈 슬롯 -->
+              <span v-else
+                class="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-400">
+                배정 필요
+              </span>
+
+              <button v-if="!team.confirmed" type="button"
+                class="w-14 shrink-0 rounded px-1 py-1 text-[11px] font-medium transition" :class="slot.needed
+                  ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
+                :title="slot.needed ? '이 포지션은 필요 없음' : '이 포지션을 다시 배정'" @mousedown.stop
+                @click.stop="setSlotNeeded(teamIndex, slotIndex, !slot.needed)">
+                {{ slot.needed ? "필요없음" : "필요" }}
+              </button>
+              <span v-else class="w-14 shrink-0" />
+            </div>
+          </div>
+
+          <div class="mt-4 border-t border-slate-100 pt-3">
+            <button type="button"
+              class="w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+              :class="team.confirmed
+                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'" :disabled="isMatching || isSaving"
+              @click="toggleTeamConfirmed(teamIndex)">
+              {{ team.confirmed ? "확정 해제" : "확정" }}
+            </button>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -489,19 +467,12 @@
 
     <!-- 요일별 합주 가능 인원 조회 팝업 -->
     <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="dayAvailabilityOpen"
+      <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0"
+        enter-to-class="opacity-100" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100"
+        leave-to-class="opacity-0">
+        <div v-if="dayAvailabilityOpen"
           class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
-          @click.self="dayAvailabilityOpen = false"
-        >
+          @click.self="dayAvailabilityOpen = false">
           <div class="relative flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
             <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4">
               <div>
@@ -510,11 +481,9 @@
                   {{ dashboardDayFilter.join("·") }} · {{ dayAvailabilityRows.length }}명
                 </p>
               </div>
-              <button
-                type="button"
+              <button type="button"
                 class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-sm text-slate-500 hover:bg-slate-200"
-                @click="dayAvailabilityOpen = false"
-              >
+                @click="dayAvailabilityOpen = false">
                 ✕
               </button>
             </div>
@@ -524,11 +493,8 @@
                 선택한 요일에 합주 가능한 제출 인원이 없습니다.
               </p>
               <ul v-else class="divide-y divide-slate-100">
-                <li
-                  v-for="row in dayAvailabilityRows"
-                  :key="row.userId"
-                  class="flex items-start justify-between gap-3 py-3"
-                >
+                <li v-for="row in dayAvailabilityRows" :key="row.userId"
+                  class="flex items-start justify-between gap-3 py-3">
                   <div class="min-w-0">
                     <p class="font-semibold text-slate-900">
                       {{ row.name }}
@@ -540,12 +506,9 @@
                       {{ row.positions.join(", ") || "포지션 없음" }}
                     </p>
                   </div>
-                  <button
-                    v-if="row.schedules.length"
-                    type="button"
+                  <button v-if="row.schedules.length" type="button"
                     class="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                    @click="openSchedule(row)"
-                  >
+                    @click="openSchedule(row)">
                     스케줄
                   </button>
                 </li>
@@ -1538,7 +1501,7 @@ function removeFromPool(
   }
 }
 
-/* 슬롯으로 드롭: 다른 팀/세션으로 복사(보컬은 1팀만, 같은 팀 보컬+악기 겸임 허용) */
+/* 슬롯으로 드롭: 다른 팀/세션으로 복사(보컬 자리는 1팀만, 다른 팀 악기는 허용) */
 function onDropToSlot(
   event: DragEvent,
   teamIndex: number,
@@ -1597,7 +1560,7 @@ function onDropToSlot(
     showAlert(
       "error",
       "보컬 1팀 제한",
-      `${payload.occupant.name} 님은 보컬로 배정되면 1개 팀에만 소속될 수 있습니다.`,
+      `${payload.occupant.name} 님은 보컬로는 1개 팀에만 배정할 수 있습니다.`,
     );
     dragPayload.value = null;
     return;
@@ -1861,9 +1824,6 @@ function maxTeamsFor(userId: number) {
 }
 
 function remainingTeamsFor(userId: number) {
-  if (isSeatedAsVocalAnywhere(userId)) {
-    return 0;
-  }
   return Math.max(0, maxTeamsFor(userId) - assignedTeamCount(userId));
 }
 
@@ -1882,35 +1842,22 @@ function isVocalPosition(position: string) {
   return position === "V" || position === "V1" || position === "V2";
 }
 
-function isSeatedAsVocalAnywhere(userId: number) {
-  return boards.value.some((team) =>
-    team.slots.some(
-      (slot) =>
-        slot.occupant?.userId === userId && isVocalPosition(slot.position),
-    ),
-  );
-}
-
-/** 보컬 배정 시 다른 팀 소속 불가 (같은 팀 보컬+악기 겸임은 허용) */
+/** 보컬(V1/V2) 자리는 1개 팀에만. 다른 팀에 악기로 들어가는 것은 허용 */
 function violatesVocalOneTeamRule(
   userId: number,
   targetTeamIndex: number,
   targetPosition: string,
 ) {
-  const otherPositions = boards.value.flatMap((team, ti) =>
-    ti === targetTeamIndex
-      ? []
-      : team.slots
-          .filter((slot) => slot.occupant?.userId === userId)
-          .map((slot) => slot.position),
-  );
-  if (!otherPositions.length) {
+  if (!isVocalPosition(targetPosition)) {
     return false;
   }
-  if (isVocalPosition(targetPosition)) {
-    return true;
-  }
-  return otherPositions.some((position) => isVocalPosition(position));
+  return boards.value.some((team, teamIndex) =>
+    teamIndex !== targetTeamIndex
+    && team.slots.some(
+      (slot) =>
+        slot.occupant?.userId === userId && isVocalPosition(slot.position),
+    ),
+  );
 }
 
 function canConcurrentAssign(
