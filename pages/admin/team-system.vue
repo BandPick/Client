@@ -180,22 +180,31 @@
                           slotIndex
                         )
                         ">
-                  <!-- 포지션 -->
-                  <span class="w-12 shrink-0 rounded px-2 py-1 text-center text-xs font-semibold" :class="!slot.needed && !slot.occupant
-                    ? 'bg-slate-50 text-slate-300'
-                    : 'bg-slate-100 text-slate-500'">
+                  <!-- 포지션: 클릭 시 이 자리만 고정 (재배정 시 유지) -->
+                  <button
+                    type="button"
+                    class="w-12 shrink-0 rounded px-1 py-1 text-center text-xs font-semibold transition"
+                    :class="slotButtonClass(team, slot)"
+                    :disabled="team.confirmed || !slot.occupant"
+                    :title="slotPinTitle(team, slot)"
+                    @mousedown.stop
+                    @click.stop="toggleSlotPinned(teamIndex, slotIndex)"
+                  >
                     {{ slot.position }}
-                  </span>
+                  </button>
 
                   <!-- 배정된 사람 -->
                   <span v-if="slot.occupant"
                     class="flex min-w-0 flex-1 items-center justify-between rounded-md bg-sky-300 px-2.5 py-1 text-sm font-medium text-black">
-                    <span :draggable="!team.confirmed" class="min-w-0 flex-1 whitespace-nowrap select-none" :class="{
-                      'cursor-grab active:cursor-grabbing': !team.confirmed,
-                      'cursor-default': team.confirmed,
+                    <span
+                      :draggable="!team.confirmed && !slot.pinned"
+                      class="min-w-0 flex-1 whitespace-nowrap select-none"
+                      :class="{
+                      'cursor-grab active:cursor-grabbing': !team.confirmed && !slot.pinned,
+                      'cursor-default': team.confirmed || slot.pinned,
                       'opacity-30': draggingUserId === slot.occupant.userId,
                     }" @dragstart="
-                      !team.confirmed && onDragStart(
+                      !team.confirmed && !slot.pinned && onDragStart(
                         $event,
                         {
                           origin: 'slot',
@@ -209,9 +218,13 @@
                       <span class="ml-1.5 text-xs text-slate-600">
                         {{ levelForPosition(slot.occupant.userId, slot.position) }}
                       </span>
+                      <span
+                        v-if="slot.pinned && !team.confirmed"
+                        class="ml-1 text-[10px] font-semibold text-amber-800"
+                      >고정</span>
                     </span>
 
-                    <button v-if="!team.confirmed" type="button"
+                    <button v-if="!team.confirmed && !slot.pinned" type="button"
                       class="ml-2 shrink-0 rounded px-1 text-sm text-slate-600 hover:bg-sky-200 hover:text-slate-900"
                       title="배정 해제" @mousedown.stop
                       @click.stop="unassign(teamIndex, slotIndex)">
@@ -684,6 +697,8 @@ type Slot = {
   position: string;
   occupant: Occupant | null;
   needed: boolean;
+  /** 재배정 시 이 세션 자리만 유지 */
+  pinned: boolean;
 };
 
 type Board = {
@@ -1066,6 +1081,7 @@ function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): B
         position,
         occupant: member ? occupantForSlot(member, position) : null,
         needed: resolveSlotNeeded(position, Boolean(member), neededByPosition),
+        pinned: false,
       };
     }),
   };
@@ -1073,8 +1089,13 @@ function boardFromMatchTeam(team: MatchTeam, name: string, confirmed = false): B
   return board;
 }
 
-/** 팀당 보컬 1명이 기본. V2에 사람이 없으면 필요없음 처리. */
+/** 팀당 보컬 1명이 기본. V2에 사람이 없으면 필요없음 처리. 드럼은 항상 필요. */
 function applyVocalNeededRules(board: Board) {
+  const drum = board.slots.find((slot) => slot.position === "D");
+  if (drum) {
+    drum.needed = true;
+  }
+
   const v2 = board.slots.find((slot) => slot.position === "V2");
   if (!v2) {
     return;
@@ -1088,34 +1109,141 @@ function applyVocalNeededRules(board: Board) {
 }
 
 function lockedTeamsPayload() {
-  return boards.value
-    .filter((team) => team.confirmed)
-    .map((team) => ({
+  const locked: {
+    name: string;
+    fullyLocked: boolean;
+    members: { userId: number; session: string }[];
+  }[] = [];
+
+  for (const team of boards.value) {
+    if (team.confirmed) {
+      locked.push({
+        name: team.name,
+        fullyLocked: true,
+        members: team.slots
+          .filter((slot) => slot.occupant)
+          .map((slot) => ({
+            userId: slot.occupant!.userId,
+            session: slot.position,
+          })),
+      });
+      continue;
+    }
+
+    const pinnedSlots = team.slots.filter((slot) => slot.pinned && slot.occupant);
+    if (!pinnedSlots.length) {
+      continue;
+    }
+    locked.push({
       name: team.name,
-      members: team.slots
-        .filter((slot) => slot.occupant)
-        .map((slot) => ({
-          userId: slot.occupant!.userId,
-          session: slot.position,
-        })),
-    }));
+      fullyLocked: false,
+      members: pinnedSlots.map((slot) => ({
+        userId: slot.occupant!.userId,
+        session: slot.position,
+      })),
+    });
+  }
+
+  return locked;
+}
+
+function snapshotPinnedSeats() {
+  return boards.value.map((team) => ({
+    name: team.name,
+    pins: team.slots
+      .filter((slot) => slot.pinned && slot.occupant)
+      .map((slot) => ({
+        position: slot.position,
+        userId: slot.occupant!.userId,
+      })),
+  }));
+}
+
+function restorePinnedSeats(
+  snapshot: { name: string; pins: { position: string; userId: number }[] }[],
+) {
+  for (const entry of snapshot) {
+    const board = boards.value.find((team) => team.name === entry.name);
+    if (!board || board.confirmed) {
+      continue;
+    }
+    for (const pin of entry.pins) {
+      const slot = board.slots.find((item) => item.position === pin.position);
+      if (slot?.occupant?.userId === pin.userId) {
+        slot.pinned = true;
+        continue;
+      }
+      // Fallback: same person still on this team under the pinned session.
+      const byUser = board.slots.find(
+        (item) =>
+          item.position === pin.position &&
+          item.occupant?.userId === pin.userId,
+      );
+      if (byUser) {
+        byUser.pinned = true;
+      }
+    }
+  }
+}
+
+function slotButtonClass(team: Board, slot: Slot) {
+  if (team.confirmed) {
+    return "bg-emerald-100 text-emerald-800";
+  }
+  if (slot.pinned) {
+    return "bg-amber-200 text-amber-900 ring-1 ring-amber-400";
+  }
+  if (!slot.needed && !slot.occupant) {
+    return "bg-slate-50 text-slate-300";
+  }
+  if (slot.occupant) {
+    return "bg-slate-100 text-slate-700 hover:bg-amber-50 hover:text-amber-900";
+  }
+  return "bg-slate-100 text-slate-500";
+}
+
+function slotPinTitle(team: Board, slot: Slot) {
+  if (team.confirmed) {
+    return "팀 확정됨 (전체 고정)";
+  }
+  if (!slot.occupant) {
+    return "사람이 배정된 자리만 고정할 수 있습니다";
+  }
+  return slot.pinned
+    ? "자리 고정 해제 — 재배정 시 이 세션도 다시 배정될 수 있습니다"
+    : "이 세션 자리 고정 — 재배정해도 유지됩니다";
+}
+
+function toggleSlotPinned(teamIndex: number, slotIndex: number) {
+  const team = boards.value[teamIndex];
+  if (!team || team.confirmed) {
+    return;
+  }
+  const slot = team.slots[slotIndex];
+  if (!slot?.occupant) {
+    return;
+  }
+  slot.pinned = !slot.pinned;
+  isDirty.value = true;
 }
 
 function applyRematchResult(result: MatchResult) {
+  const pinSnapshot = snapshotPinnedSeats();
   const confirmedByName = new Map(
     boards.value
       .filter((team) => team.confirmed)
       .map((team) => [team.name, team] as const),
   );
-  const openNames = TEAM_BOARD_NAMES.filter((name) => !confirmedByName.has(name));
 
-  const rematchedBoards = result.teams
-    .slice(0, openNames.length)
-    .map((team, index) => boardFromMatchTeam(team, openNames[index]!, false));
-
-  const rematchedByName = new Map(
-    rematchedBoards.map((team) => [team.name, team] as const),
-  );
+  // Match by team name from server (not array order) so multi-team pins survive.
+  const rematchedByName = new Map<string, Board>();
+  for (const team of result.teams ?? []) {
+    const name = String(team.name ?? "").trim();
+    if (!name || confirmedByName.has(name)) {
+      continue;
+    }
+    rematchedByName.set(name, boardFromMatchTeam(team, name, false));
+  }
 
   boards.value = TEAM_BOARD_NAMES.map((name) => {
     const confirmed = confirmedByName.get(name);
@@ -1124,6 +1252,8 @@ function applyRematchResult(result: MatchResult) {
     }
     return rematchedByName.get(name) ?? emptyBoard(name);
   });
+
+  restorePinnedSeats(pinSnapshot);
 
   for (const team of result.teams) {
     for (const member of team.members) {
@@ -1203,7 +1333,7 @@ async function handleRematch() {
       "success",
       "재배정 완료",
       lockedTeams.length
-        ? `확정 ${lockedTeams.length}개 팀은 유지하고 나머지 인원으로 다시 배정했습니다.`
+        ? `확정 팀·고정 자리 ${lockedTeams.length}건을 유지하고 나머지를 다시 배정했습니다.`
         : "전체 팀을 다시 배정했습니다.",
     );
   } catch (error) {
@@ -1408,7 +1538,7 @@ function removeFromPool(
   }
 }
 
-/* 슬롯으로 드롭: 다른 팀/세션으로 복사해 여러 팀·보컬 겸임을 허용 */
+/* 슬롯으로 드롭: 다른 팀/세션으로 복사(보컬은 1팀만, 같은 팀 보컬+악기 겸임 허용) */
 function onDropToSlot(
   event: DragEvent,
   teamIndex: number,
@@ -1428,6 +1558,15 @@ function onDropToSlot(
   }
 
   const targetSlot = team.slots[slotIndex];
+  if (targetSlot.pinned) {
+    showAlert(
+      "error",
+      "고정된 자리",
+      "고정된 세션 자리에는 다른 사람을 넣을 수 없습니다. 자리 고정을 먼저 해제해 주세요.",
+    );
+    dragPayload.value = null;
+    return;
+  }
   const displaced = targetSlot.occupant;
 
   if (
@@ -1444,6 +1583,22 @@ function onDropToSlot(
     assignedTeamCount(payload.occupant.userId) >= maxTeamsFor(payload.occupant.userId)
   ) {
     showMaxTeamAlert(payload.occupant.name, maxTeamsFor(payload.occupant.userId));
+    dragPayload.value = null;
+    return;
+  }
+
+  if (
+    violatesVocalOneTeamRule(
+      payload.occupant.userId,
+      teamIndex,
+      targetSlot.position,
+    )
+  ) {
+    showAlert(
+      "error",
+      "보컬 1팀 제한",
+      `${payload.occupant.name} 님은 보컬로 배정되면 1개 팀에만 소속될 수 있습니다.`,
+    );
     dragPayload.value = null;
     return;
   }
@@ -1500,6 +1655,15 @@ function onDropToPool(event: DragEvent) {
     return;
   }
   const slot = team.slots[slotIndex];
+  if (slot?.pinned) {
+    showAlert(
+      "error",
+      "고정된 자리",
+      "고정된 세션은 풀로 옮길 수 없습니다. 자리 고정을 먼저 해제해 주세요.",
+    );
+    dragPayload.value = null;
+    return;
+  }
   const occupant = slot?.occupant;
   if (occupant) {
     rememberPerson(occupant);
@@ -1518,6 +1682,14 @@ function unassign(teamIndex: number, slotIndex: number) {
     return;
   }
   const slot = team.slots[slotIndex];
+  if (slot.pinned) {
+    showAlert(
+      "error",
+      "고정된 자리",
+      "고정된 세션은 해제할 수 없습니다. 자리 고정을 먼저 해제해 주세요.",
+    );
+    return;
+  }
   const occupant = slot.occupant;
   if (!occupant) {
     return;
@@ -1535,6 +1707,22 @@ function setSlotNeeded(teamIndex: number, slotIndex: number, needed: boolean) {
     return;
   }
   const slot = team.slots[slotIndex];
+  if (slot.position === "D" && !needed) {
+    showAlert(
+      "error",
+      "드럼 필수",
+      "드럼(D)은 필요없음으로 둘 수 없습니다.",
+    );
+    return;
+  }
+  if (slot.pinned && !needed) {
+    showAlert(
+      "error",
+      "고정된 자리",
+      "고정된 세션은 필요없음으로 둘 수 없습니다. 자리 고정을 먼저 해제해 주세요.",
+    );
+    return;
+  }
   if (!needed && slot.occupant) {
     rememberPerson(slot.occupant);
     slot.occupant = null;
@@ -1673,6 +1861,9 @@ function maxTeamsFor(userId: number) {
 }
 
 function remainingTeamsFor(userId: number) {
+  if (isSeatedAsVocalAnywhere(userId)) {
+    return 0;
+  }
   return Math.max(0, maxTeamsFor(userId) - assignedTeamCount(userId));
 }
 
@@ -1689,6 +1880,37 @@ function assignedPositionsInTeam(userId: number, teamIndex: number) {
 /** 보컬(V1/V2) + 악기 한 자리만 한 팀에서 세션 겸임 허용 */
 function isVocalPosition(position: string) {
   return position === "V" || position === "V1" || position === "V2";
+}
+
+function isSeatedAsVocalAnywhere(userId: number) {
+  return boards.value.some((team) =>
+    team.slots.some(
+      (slot) =>
+        slot.occupant?.userId === userId && isVocalPosition(slot.position),
+    ),
+  );
+}
+
+/** 보컬 배정 시 다른 팀 소속 불가 (같은 팀 보컬+악기 겸임은 허용) */
+function violatesVocalOneTeamRule(
+  userId: number,
+  targetTeamIndex: number,
+  targetPosition: string,
+) {
+  const otherPositions = boards.value.flatMap((team, ti) =>
+    ti === targetTeamIndex
+      ? []
+      : team.slots
+          .filter((slot) => slot.occupant?.userId === userId)
+          .map((slot) => slot.position),
+  );
+  if (!otherPositions.length) {
+    return false;
+  }
+  if (isVocalPosition(targetPosition)) {
+    return true;
+  }
+  return otherPositions.some((position) => isVocalPosition(position));
 }
 
 function canConcurrentAssign(
@@ -2057,6 +2279,7 @@ function emptyBoard(name: string): Board {
       position,
       occupant: null,
       needed: !OPTIONAL_POSITIONS.has(position),
+      pinned: false,
     })),
   };
   applyVocalNeededRules(board);
