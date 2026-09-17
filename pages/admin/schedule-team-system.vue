@@ -302,6 +302,38 @@
                 </label>
               </div>
 
+              <div
+                v-if="selectedCommonRanges.length"
+                class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5"
+              >
+                <p class="mb-1.5 text-xs font-semibold text-sky-700">
+                  합주 가능 시간
+                </p>
+                <ul class="space-y-1 text-sm text-slate-700">
+                  <li
+                    v-for="range in selectedCommonRanges"
+                    :key="`${range.day}-${range.startHour}`"
+                    :class="
+                      range.day === editForm.day
+                        ? 'font-semibold text-sky-900'
+                        : 'text-slate-600'
+                    "
+                  >
+                    {{ range.label }}
+                    <span
+                      v-if="range.day === editForm.day"
+                      class="ml-1 text-xs font-medium text-sky-600"
+                    >(선택 요일)</span>
+                  </li>
+                </ul>
+              </div>
+              <p
+                v-else
+                class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700"
+              >
+                이 팀의 공통 가능 시간 정보가 없습니다.
+              </p>
+
               <p class="text-xs text-slate-400">시간은 5분 단위로 맞춰집니다. (09:00–22:00)</p>
               <p v-if="editFormError" class="text-xs text-red-600">{{ editFormError }}</p>
             </div>
@@ -341,10 +373,29 @@
             </div>
 
             <div
-              v-if="selectedEvent.note"
-              class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500"
+              v-if="selectedCommonRanges.length"
+              class="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5"
             >
-              {{ selectedEvent.note }}
+              <p class="mb-1.5 text-xs font-semibold text-sky-700">
+                원래 합주 가능 시간 (팀 전원 공통)
+              </p>
+              <ul class="space-y-1 text-sm text-slate-700">
+                <li
+                  v-for="range in selectedCommonRanges"
+                  :key="`${range.day}-${range.startHour}`"
+                  :class="
+                    range.day === selectedEvent.day
+                      ? 'font-semibold text-sky-900'
+                      : 'text-slate-600'
+                  "
+                >
+                  {{ range.label }}
+                  <span
+                    v-if="range.day === selectedEvent.day"
+                    class="ml-1 text-xs font-medium text-sky-600"
+                  >(이 일정 요일)</span>
+                </li>
+              </ul>
             </div>
           </template>
         </div>
@@ -596,6 +647,65 @@ const weekLabel = computed(() => {
   const last = weekDays.value[4];
   if (!first || !last) return "";
   return `${first.date} – ${last.date}`;
+});
+
+type CommonRange = {
+  day: string;
+  startHour: number;
+  endHour: number;
+  label: string;
+};
+
+/** 팀 전원 공통 가능 30분 슬롯 → 연속 구간 (예: 화 17:00–21:00) */
+function commonRangesForTeam(teamId: number): CommonRange[] {
+  const common = commonSlotsByTeam.value.get(teamId);
+  if (!common || common.size === 0) return [];
+
+  const hoursByDay = new Map<string, number[]>();
+  for (const key of common) {
+    const [day, time] = String(key).split("|");
+    if (!day || !time) continue;
+    const hour = parseHour(time);
+    if (!Number.isFinite(hour)) continue;
+    const list = hoursByDay.get(day) ?? [];
+    list.push(hour);
+    hoursByDay.set(day, list);
+  }
+
+  const ranges: CommonRange[] = [];
+  for (const day of dayNames) {
+    const hours = [...(hoursByDay.get(day) ?? [])].sort((a, b) => a - b);
+    if (!hours.length) continue;
+
+    let rangeStart = hours[0]!;
+    let prev = hours[0]!;
+    for (let i = 1; i <= hours.length; i += 1) {
+      const current = hours[i];
+      const contiguous =
+        current != null && Math.abs(current - (prev + GRID_STEP)) < 1e-9;
+      if (contiguous) {
+        prev = current;
+        continue;
+      }
+      const endHour = prev + GRID_STEP;
+      const dayName = dayLabels[day] ?? day;
+      ranges.push({
+        day,
+        startHour: rangeStart,
+        endHour,
+        label: `${dayName} ${formatTime(rangeStart)} – ${formatTime(endHour)}`,
+      });
+      if (current == null) break;
+      rangeStart = current;
+      prev = current;
+    }
+  }
+  return ranges;
+}
+
+const selectedCommonRanges = computed(() => {
+  if (!selectedEvent.value) return [];
+  return commonRangesForTeam(selectedEvent.value.teamId);
 });
 
 function formatWeekStartIso() {
