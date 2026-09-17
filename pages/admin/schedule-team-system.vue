@@ -173,8 +173,7 @@
             <div
               v-for="day in weekDays"
               :key="day.key"
-              class="relative h-10 border-b border-l border-slate-100"
-              :class="day.isToday ? 'bg-rose-50/40' : 'bg-white hover:bg-slate-50/50'"
+              class="pointer-events-none relative h-10 border-b border-l border-slate-100 bg-transparent"
               :data-day="day.key"
               :data-slot="slot"
               :style="{ zIndex: cellZIndex(day.key, slot) }"
@@ -184,11 +183,11 @@
                   v-if="visibleTeams.includes(event.teamId) && nearlyEqual(gridSlotOf(event.startHour), slot)"
                   role="button"
                   tabindex="0"
-                  class="absolute inset-x-1 z-10 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
+                  class="pointer-events-auto absolute inset-x-1 overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-95"
                   :class="[
                     isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                     resizing?.eventId === event.id || moving?.eventId === event.id
-                      ? 'z-20 ring-2 ring-slate-400/50 brightness-95'
+                      ? 'ring-2 ring-slate-400/50 brightness-95'
                       : '',
                   ]"
                   :style="getEventStyle(event)"
@@ -251,11 +250,11 @@
     >
       <div
         v-if="selectedEvent"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
+        class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
         @click.self="closeEventDialog"
       >
         <div
-          class="relative w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl"
+          class="relative z-[201] w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl"
           :style="{ borderTop: `4px solid ${selectedEvent.color}` }"
         >
           <button
@@ -303,6 +302,38 @@
                 </label>
               </div>
 
+              <div
+                v-if="selectedCommonRanges.length"
+                class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5"
+              >
+                <p class="mb-1.5 text-xs font-semibold text-sky-700">
+                  합주 가능 시간
+                </p>
+                <ul class="space-y-1 text-sm text-slate-700">
+                  <li
+                    v-for="range in selectedCommonRanges"
+                    :key="`${range.day}-${range.startHour}`"
+                    :class="
+                      range.day === editForm.day
+                        ? 'font-semibold text-sky-900'
+                        : 'text-slate-600'
+                    "
+                  >
+                    {{ range.label }}
+                    <span
+                      v-if="range.day === editForm.day"
+                      class="ml-1 text-xs font-medium text-sky-600"
+                    >(선택 요일)</span>
+                  </li>
+                </ul>
+              </div>
+              <p
+                v-else
+                class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700"
+              >
+                이 팀의 공통 가능 시간 정보가 없습니다.
+              </p>
+
               <p class="text-xs text-slate-400">시간은 5분 단위로 맞춰집니다. (09:00–22:00)</p>
               <p v-if="editFormError" class="text-xs text-red-600">{{ editFormError }}</p>
             </div>
@@ -342,10 +373,29 @@
             </div>
 
             <div
-              v-if="selectedEvent.note"
-              class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500"
+              v-if="selectedCommonRanges.length"
+              class="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5"
             >
-              {{ selectedEvent.note }}
+              <p class="mb-1.5 text-xs font-semibold text-sky-700">
+                원래 합주 가능 시간 (팀 전원 공통)
+              </p>
+              <ul class="space-y-1 text-sm text-slate-700">
+                <li
+                  v-for="range in selectedCommonRanges"
+                  :key="`${range.day}-${range.startHour}`"
+                  :class="
+                    range.day === selectedEvent.day
+                      ? 'font-semibold text-sky-900'
+                      : 'text-slate-600'
+                  "
+                >
+                  {{ range.label }}
+                  <span
+                    v-if="range.day === selectedEvent.day"
+                    class="ml-1 text-xs font-medium text-sky-600"
+                  >(이 일정 요일)</span>
+                </li>
+              </ul>
             </div>
           </template>
         </div>
@@ -372,9 +422,9 @@
       >
         <div
           v-if="availabilityConfirm"
-          class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
+          class="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-[2px]"
         >
-          <div class="relative w-full max-w-sm rounded-2xl bg-white p-7 shadow-2xl">
+          <div class="relative z-[211] w-full max-w-sm rounded-2xl bg-white p-7 shadow-2xl">
             <h2 class="mb-3 text-lg font-bold text-slate-900">합주 가능 시간 확인</h2>
             <p class="text-sm leading-6 text-slate-600">
               전체 합주가 불가능한 시간입니다. 변경하시겠습니까?
@@ -599,6 +649,65 @@ const weekLabel = computed(() => {
   return `${first.date} – ${last.date}`;
 });
 
+type CommonRange = {
+  day: string;
+  startHour: number;
+  endHour: number;
+  label: string;
+};
+
+/** 팀 전원 공통 가능 30분 슬롯 → 연속 구간 (예: 화 17:00–21:00) */
+function commonRangesForTeam(teamId: number): CommonRange[] {
+  const common = commonSlotsByTeam.value.get(teamId);
+  if (!common || common.size === 0) return [];
+
+  const hoursByDay = new Map<string, number[]>();
+  for (const key of common) {
+    const [day, time] = String(key).split("|");
+    if (!day || !time) continue;
+    const hour = parseHour(time);
+    if (!Number.isFinite(hour)) continue;
+    const list = hoursByDay.get(day) ?? [];
+    list.push(hour);
+    hoursByDay.set(day, list);
+  }
+
+  const ranges: CommonRange[] = [];
+  for (const day of dayNames) {
+    const hours = [...(hoursByDay.get(day) ?? [])].sort((a, b) => a - b);
+    if (!hours.length) continue;
+
+    let rangeStart = hours[0]!;
+    let prev = hours[0]!;
+    for (let i = 1; i <= hours.length; i += 1) {
+      const current = hours[i];
+      const contiguous =
+        current != null && Math.abs(current - (prev + GRID_STEP)) < 1e-9;
+      if (contiguous) {
+        prev = current;
+        continue;
+      }
+      const endHour = prev + GRID_STEP;
+      const dayName = dayLabels[day] ?? day;
+      ranges.push({
+        day,
+        startHour: rangeStart,
+        endHour,
+        label: `${dayName} ${formatTime(rangeStart)} – ${formatTime(endHour)}`,
+      });
+      if (current == null) break;
+      rangeStart = current;
+      prev = current;
+    }
+  }
+  return ranges;
+}
+
+const selectedCommonRanges = computed(() => {
+  if (!selectedEvent.value) return [];
+  return commonRangesForTeam(selectedEvent.value.teamId);
+});
+
 function formatWeekStartIso() {
   const d = weekStartDate.value;
   const y = d.getFullYear();
@@ -680,25 +789,37 @@ function getEventsAt(day: string, hour: number) {
 }
 
 function cellZIndex(day: string, slot: number) {
-  const hasStartingEvent = events.value.some(
-    (event) =>
-      visibleTeams.value.includes(event.teamId) &&
-      event.day === day &&
-      Math.abs(gridSlotOf(event.startHour) - slot) < 1e-9,
-  );
-  return hasStartingEvent ? 40 : 1;
+  // 카드는 시작 칸에서 아래 칸으로 overflow 되므로,
+  // 더 늦게 시작하는 일정의 칸이 위에 와야 앞 팀 카드가 잘리지 않는다.
+  // 값은 모달(z-100+)보다 항상 작게 유지한다.
+  let maxStartMinutes = -1;
+  for (const event of events.value) {
+    if (!visibleTeams.value.includes(event.teamId) || event.day !== day) {
+      continue;
+    }
+    if (Math.abs(gridSlotOf(event.startHour) - slot) >= 1e-9) {
+      continue;
+    }
+    maxStartMinutes = Math.max(maxStartMinutes, Math.round(event.startHour * 60));
+  }
+  if (maxStartMinutes < 0) return 0;
+  return 1 + Math.min(80, Math.floor(maxStartMinutes / 15));
 }
 
 function getEventStyle(event: ScheduleEvent) {
   const gridStart = gridSlotOf(event.startHour);
   const topOffset = (event.startHour - gridStart) * 60 * PX_PER_MINUTE;
   const durationMinutes = (event.endHour - event.startHour) * 60;
+  const active =
+    resizing.value?.eventId === event.id || moving.value?.eventId === event.id;
   return {
     top: `${topOffset + 0.5}px`,
     height: `${Math.max(durationMinutes * PX_PER_MINUTE - 4, 10)}px`,
     background: `${event.color}28`,
     borderLeft: `3px solid ${event.color}`,
     color: event.color,
+    // 모달(z-100) 아래에 두고, 시작이 늦은 카드만 상대적으로 위
+    zIndex: active ? 90 : 1 + Math.min(80, Math.floor((event.startHour * 60) / 15)),
   };
 }
 
@@ -1058,19 +1179,34 @@ function onCardPointerDown(event: ScheduleEvent, pointerEvent: PointerEvent) {
 }
 
 function findCellAtPoint(clientX: number, clientY: number) {
-  const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-  const cell = el?.closest("[data-day][data-slot]") as HTMLElement | null;
-  if (!cell) return null;
-  const day = cell.dataset.day;
-  const slotRaw = cell.dataset.slot;
-  if (!day || slotRaw == null) return null;
-  const slot = Number(slotRaw);
-  if (!Number.isFinite(slot)) return null;
-  const rect = cell.getBoundingClientRect();
-  const offsetRatio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
-  const offsetMinutes =
-    Math.round((offsetRatio * GRID_STEP * 60) / SNAP_MINUTES) * SNAP_MINUTES;
-  return { day, slot, offsetMinutes };
+  // 칸이 pointer-events-none 이라 elementFromPoint 대신 좌표로 판정
+  const root = boardScrollEl.value;
+  if (!root) return null;
+  const cells = root.querySelectorAll<HTMLElement>("[data-day][data-slot]");
+  for (const cell of cells) {
+    const rect = cell.getBoundingClientRect();
+    if (
+      clientX < rect.left ||
+      clientX >= rect.right ||
+      clientY < rect.top ||
+      clientY >= rect.bottom
+    ) {
+      continue;
+    }
+    const day = cell.dataset.day;
+    const slotRaw = cell.dataset.slot;
+    if (!day || slotRaw == null) return null;
+    const slot = Number(slotRaw);
+    if (!Number.isFinite(slot)) return null;
+    const offsetRatio = Math.min(
+      1,
+      Math.max(0, (clientY - rect.top) / rect.height),
+    );
+    const offsetMinutes =
+      Math.round((offsetRatio * GRID_STEP * 60) / SNAP_MINUTES) * SNAP_MINUTES;
+    return { day, slot, offsetMinutes };
+  }
+  return null;
 }
 
 function onMoveMove(pointerEvent: PointerEvent) {
