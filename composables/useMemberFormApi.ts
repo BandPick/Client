@@ -93,6 +93,26 @@ export type TeamFormMemberResponse = {
   schedules: TeamFormScheduleRequest[];
 };
 
+export type MemberTeamSlotResponse = {
+  position: string;
+  needed: boolean;
+  userId: number | null;
+  name: string | null;
+  level: string;
+  me: boolean;
+};
+
+export type MemberTeamCardResponse = {
+  name: string;
+  confirmed: boolean;
+  myPositions: string[];
+  slots: MemberTeamSlotResponse[];
+};
+
+export type MemberTeamAssignmentResponse = {
+  teams: MemberTeamCardResponse[];
+};
+
 function joinApiPath(base: string, pathWithoutPrefix: string): string {
   const cleanBase = String(base).replace(/\/$/, "");
   const cleanPath = String(pathWithoutPrefix).replace(/^\/+/, "");
@@ -197,6 +217,13 @@ export function useMemberFormApi() {
     }
   }
 
+  async function loadMemberTeamAssignments(userId: number) {
+    return await $fetch<MemberTeamAssignmentResponse>(
+      joinApiPath(config.public.apiBase, `users/${userId}/team-assignments`),
+      { method: "GET" },
+    );
+  }
+
   return {
     settingsUrl,
     submissionUrl,
@@ -206,5 +233,6 @@ export function useMemberFormApi() {
     loadMemberForm,
     submitTeamForm,
     loadTeamForm,
+    loadMemberTeamAssignments,
   };
 }

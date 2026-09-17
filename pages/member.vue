@@ -166,22 +166,31 @@
           class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
           로그인 화면으로
         </NuxtLink>
-        <button type="button"
-          class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
-          :disabled="saving || settingsLoading || isDeadlinePassed" :class="saving || settingsLoading || isDeadlinePassed
-            ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
-            : ''
-            " @click="handleSave">
-          {{
-            saving
-              ? "저장 중..."
-              : isDeadlinePassed
-                ? "신청 마감됨"
-                : "저장"
-          }}
-        </button>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button type="button"
+            class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            @click="resultDialogOpen = true">
+            결과 확인하기
+          </button>
+          <button type="button"
+            class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+            :disabled="saving || settingsLoading || isDeadlinePassed" :class="saving || settingsLoading || isDeadlinePassed
+              ? 'cursor-not-allowed opacity-60 hover:bg-blue-600'
+              : ''
+              " @click="handleSave">
+            {{
+              saving
+                ? "저장 중..."
+                : isDeadlinePassed
+                  ? "신청 마감됨"
+                  : "저장"
+            }}
+          </button>
+        </div>
       </div>
     </section>
+
+    <MemberTeamResultDialog :open="resultDialogOpen" @close="resultDialogOpen = false" />
 
     <CommonAlertDialog :open="alertOpen" :type="alertType" :title="alertTitle" :message="alertMessage"
       :action-label="alertActionLabel" @close="alertOpen = false" @confirm="onAlertConfirm" />
@@ -234,6 +243,7 @@ const alertTitle = ref("");
 const alertMessage = ref("");
 const alertActionLabel = ref("확인");
 const goHomeOnConfirm = ref(false);
+const resultDialogOpen = ref(false);
 const { loadSongsForMemberForm } = useMemberSetlistLoader();
 const { loadMemberSettings, submitMemberForm, submitTeamForm, loadMemberForm, loadTeamForm } = useMemberFormApi();
 const { loadAuthUser } = useAuthApi();
